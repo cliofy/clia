@@ -83,6 +83,12 @@ func DefaultConfig() *Config {
 					MaxTokens:   1000,
 					Temperature: 0.7,
 				},
+				"openrouter": {
+					Model:       "openai/gpt-3.5-turbo",
+					Endpoint:    "https://openrouter.ai/api/v1",
+					MaxTokens:   1000,
+					Temperature: 0.7,
+				},
 			},
 		},
 		UI: UIConfig{

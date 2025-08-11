@@ -248,3 +248,15 @@ func (p *OpenAIProvider) TestConnection(ctx context.Context) error {
 	_, err := p.Complete(testCtx, testReq)
 	return err
 }
+
+// SwitchModel implements ModelSwitcher interface for OpenAI
+func (p *OpenAIProvider) SwitchModel(modelName string) error {
+	if p.config == nil {
+		return fmt.Errorf("provider config is nil")
+	}
+	
+	// Update the model in config
+	p.config.Model = modelName
+	
+	return nil
+}

@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // LLMProvider defines the interface for LLM providers
@@ -30,6 +31,7 @@ const (
 	ProviderTypeOpenAI    ProviderType = "openai"
 	ProviderTypeAnthropic ProviderType = "anthropic"
 	ProviderTypeOllama    ProviderType = "ollama"
+	ProviderTypeOpenRouter ProviderType = "openrouter"
 )
 
 // ProviderFactory creates LLM providers
@@ -46,6 +48,10 @@ func NewProviderFactory() *ProviderFactory {
 	// Register built-in providers
 	factory.Register(ProviderTypeOpenAI, func(config *ProviderConfig) LLMProvider {
 		return NewOpenAIProvider(config)
+	})
+	
+	factory.Register(ProviderTypeOpenRouter, func(config *ProviderConfig) LLMProvider {
+		return NewOpenRouterProvider(config)
 	})
 	
 	return factory
@@ -84,7 +90,7 @@ func (f *ProviderFactory) GetSupportedProviders() []ProviderType {
 func DefaultProviderConfig(providerType ProviderType) *ProviderConfig {
 	base := &ProviderConfig{
 		Name:        string(providerType),
-		Timeout:     30000, // 30 seconds in milliseconds
+		Timeout:     30 * time.Second, // 30 seconds
 		MaxTokens:   1000,
 		Temperature: 0.7,
 	}
@@ -99,6 +105,9 @@ func DefaultProviderConfig(providerType ProviderType) *ProviderConfig {
 	case ProviderTypeOllama:
 		base.Model = "llama2"
 		base.Endpoint = "http://localhost:11434"
+	case ProviderTypeOpenRouter:
+		base.Model = "openai/gpt-3.5-turbo"
+		base.Endpoint = "https://openrouter.ai/api/v1"
 	}
 	
 	return base

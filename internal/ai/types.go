@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"time"
 )
 
@@ -129,4 +130,39 @@ func (cs CommandSuggestions) Top(n int) CommandSuggestions {
 		return cs
 	}
 	return cs[:n]
+}
+
+// ModelInfo represents information about an AI model
+type ModelInfo struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Pricing     string  `json:"pricing"`
+	ContextSize int     `json:"context_length"`
+	Current     bool    `json:"current"`
+}
+
+// ProviderStatusInfo represents the status of a provider
+type ProviderStatusInfo struct {
+	Type       ProviderType `json:"type"`
+	Available  bool         `json:"available"`
+	Configured bool         `json:"configured"`
+	Current    bool         `json:"current"`
+}
+
+// Extended interfaces for providers
+
+// ModelListProvider interface for providers that support listing models
+type ModelListProvider interface {
+	GetModels(ctx context.Context) ([]ModelInfo, error)
+}
+
+// ModelSwitcher interface for providers that support dynamic model switching
+type ModelSwitcher interface {
+	SwitchModel(modelName string) error
+}
+
+// ConnectionTester interface for providers that support connection testing
+type ConnectionTester interface {
+	TestConnection(ctx context.Context) error
 }

@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+clia
+
 # Test binary, built with `go test -c`
 *.test
 

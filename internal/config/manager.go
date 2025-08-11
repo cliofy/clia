@@ -63,8 +63,8 @@ func (m *Manager) Save() error {
 	// Write a basic config template
 	template := `# clia configuration file
 api:
-  provider: "openai"  # openai, anthropic, ollama
-  key: ""  # Set via environment variable OPENAI_API_KEY, etc.
+  provider: "openai"  # openai, anthropic, ollama, openrouter
+  key: ""  # Set via environment variable OPENAI_API_KEY, OPENROUTER_API_KEY, etc.
   model: "gpt-3.5-turbo"
   timeout: 10s
   max_tokens: 1000
@@ -84,6 +84,41 @@ context:
   include_hidden_files: false
   max_files_in_context: 50
   include_env_vars: false
+
+# Provider-specific configurations
+# Uncomment and configure the provider you want to use
+
+providers:
+  openai:
+    model: "gpt-3.5-turbo"
+    endpoint: "https://api.openai.com/v1"
+    max_tokens: 1000
+    temperature: 0.7
+
+  openrouter:
+    model: "openai/gpt-3.5-turbo"  # Access OpenAI models via OpenRouter
+    # model: "anthropic/claude-3-sonnet"  # Or use Claude via OpenRouter
+    # model: "google/gemini-pro"  # Or use Gemini via OpenRouter
+    endpoint: "https://openrouter.ai/api/v1"
+    max_tokens: 1000
+    temperature: 0.7
+
+  anthropic:
+    model: "claude-3-sonnet-20240229"
+    endpoint: "https://api.anthropic.com"
+    max_tokens: 1000
+    temperature: 0.7
+
+  ollama:
+    model: "llama2"
+    endpoint: "http://localhost:11434"
+    max_tokens: 1000
+    temperature: 0.7
+
+# Environment variables to set:
+# export OPENAI_API_KEY="your-openai-key"
+# export OPENROUTER_API_KEY="your-openrouter-key"  
+# export ANTHROPIC_API_KEY="your-anthropic-key"
 `
 	
 	_, err = file.WriteString(template)
@@ -127,6 +162,8 @@ func (m *Manager) GetAPIKeyFromEnv() string {
 		return os.Getenv("ANTHROPIC_API_KEY")
 	case "claude":
 		return os.Getenv("CLAUDE_API_KEY")
+	case "openrouter":
+		return os.Getenv("OPENROUTER_API_KEY")
 	default:
 		// Try generic format: PROVIDER_API_KEY
 		envVar := fmt.Sprintf("%s_API_KEY", provider)

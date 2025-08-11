@@ -2,6 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/yourusername/clia/internal/ai"
 )
 
 // Message represents a message in the chat history
@@ -102,5 +103,111 @@ type aiProcessingMsg struct{}
 func AIProcessingCmd() tea.Cmd {
 	return func() tea.Msg {
 		return aiProcessingMsg{}
+	}
+}
+
+// Command-related messages
+
+// commandMsg represents a command being processed
+type commandMsg struct {
+	command string
+	args    []string
+	raw     string
+}
+
+// CommandCmd returns a command to process a command
+func CommandCmd(command string, args []string, raw string) tea.Cmd {
+	return func() tea.Msg {
+		return commandMsg{
+			command: command,
+			args:    args,
+			raw:     raw,
+		}
+	}
+}
+
+// providerSwitchMsg represents a provider switch operation
+type providerSwitchMsg struct {
+	providerType string
+	success      bool
+	error        error
+	needsAPIKey  bool
+}
+
+// ProviderSwitchCmd returns a command to switch providers
+func ProviderSwitchCmd(providerType string, success bool, err error, needsAPIKey bool) tea.Cmd {
+	return func() tea.Msg {
+		return providerSwitchMsg{
+			providerType: providerType,
+			success:      success,
+			error:        err,
+			needsAPIKey:  needsAPIKey,
+		}
+	}
+}
+
+// modelListMsg represents model list results
+type modelListMsg struct {
+	models []ai.ModelInfo
+	error  error
+}
+
+// ModelListCmd returns a command to fetch model list
+func ModelListCmd(models []ai.ModelInfo, err error) tea.Cmd {
+	return func() tea.Msg {
+		return modelListMsg{
+			models: models,
+			error:  err,
+		}
+	}
+}
+
+// modelSwitchMsg represents a model switch operation
+type modelSwitchMsg struct {
+	modelName string
+	success   bool
+	error     error
+}
+
+// ModelSwitchCmd returns a command to switch models
+func ModelSwitchCmd(modelName string, success bool, err error) tea.Cmd {
+	return func() tea.Msg {
+		return modelSwitchMsg{
+			modelName: modelName,
+			success:   success,
+			error:     err,
+		}
+	}
+}
+
+// apiKeyInputMsg represents API key input request
+type apiKeyInputMsg struct {
+	providerType string
+	prompt       string
+}
+
+// APIKeyInputCmd returns a command to request API key input
+func APIKeyInputCmd(providerType, prompt string) tea.Cmd {
+	return func() tea.Msg {
+		return apiKeyInputMsg{
+			providerType: providerType,
+			prompt:       prompt,
+		}
+	}
+}
+
+// apiKeySubmitMsg represents API key submission
+type apiKeySubmitMsg struct {
+	providerType string
+	apiKey       string
+}
+
+// APIKeySubmitCmd returns a command to submit API key
+func APIKeySubmitCmd(providerType, apiKey string) tea.Cmd {
+	return func() tea.Msg {
+		return apiKeySubmitMsg{
+			providerType: providerType,
+			apiKey:       apiKey,
+		}
 	}
 }

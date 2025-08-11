@@ -1,7 +1,12 @@
 package tui
 
 import (
+	"fmt"
+	
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	
+	"github.com/yourusername/clia/internal/ai"
 )
 
 // Update handles all incoming messages and updates the model state
@@ -47,6 +52,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case aiResponseMsg:
 		m.handleAIResponse(msg)
 
+	case commandMsg:
+		// Command messages are handled in handleInputSubmit
+		
+	case providerSwitchMsg:
+		m.handleProviderSwitchMsg(msg)
+		
+	case modelListMsg:
+		m.handleModelListMsg(msg)
+		
+	case modelSwitchMsg:
+		m.handleModelSwitchMsg(msg)
+		
+	case apiKeyInputMsg:
+		m.handleAPIKeyInputMsg(msg)
+		
+	case apiKeySubmitMsg:
+		return m.handleAPIKeySubmitMsg(msg)
+
 	default:
 		// Update input component
 		m.input, cmd = m.input.Update(msg)
@@ -79,4 +102,102 @@ func (m *Model) handleKeyInput(key string) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// handleProviderSwitchMsg handles provider switch results
+func (m *Model) handleProviderSwitchMsg(msg providerSwitchMsg) {
+	if msg.needsAPIKey {
+		m.addMessage(fmt.Sprintf("🔑 %s provider needs API key configuration", msg.providerType), MessageTypeSystem)
+		return
+	}
+	
+	if msg.success {
+		m.currentProvider = msg.providerType
+		// Get the new model from the provider
+		providerInfo := m.aiService.GetProviderInfo()
+		if model, ok := providerInfo["model"].(string); ok {
+			m.currentModel = model
+		}
+		m.status = fmt.Sprintf("Ready - %s • %s", m.currentProvider, m.currentModel)
+		m.addMessage(fmt.Sprintf("✅ Switched to %s provider", msg.providerType), MessageTypeSystem)
+	} else {
+		errorMsg := "Failed to switch provider"
+		if msg.error != nil {
+			errorMsg += ": " + msg.error.Error()
+		}
+		m.addMessage("❌ "+errorMsg, MessageTypeError)
+	}
+}
+
+// handleModelListMsg handles model list results
+func (m *Model) handleModelListMsg(msg modelListMsg) {
+	if msg.error != nil {
+		m.addMessage("❌ Failed to fetch models: "+msg.error.Error(), MessageTypeError)
+		return
+	}
+	
+	if len(msg.models) == 0 {
+		m.addMessage("No models available for current provider", MessageTypeSystem)
+		return
+	}
+	
+	formatted := FormatModelList(msg.models, m.currentModel, 15) // Show first 15 models
+	m.addMessage(formatted, MessageTypeSystem)
+	
+	if len(msg.models) > 15 {
+		m.addMessage(fmt.Sprintf("Showing 15 of %d models. Use '/model <name>' to switch.", len(msg.models)), MessageTypeSystem)
+	}
+}
+
+// handleModelSwitchMsg handles model switch results  
+func (m *Model) handleModelSwitchMsg(msg modelSwitchMsg) {
+	if msg.success {
+		m.currentModel = msg.modelName
+		m.status = fmt.Sprintf("Ready - %s • %s", m.currentProvider, m.currentModel)
+		m.addMessage(fmt.Sprintf("✅ Switched to model: %s", msg.modelName), MessageTypeSystem)
+	} else {
+		errorMsg := "Failed to switch model"
+		if msg.error != nil {
+			errorMsg += ": " + msg.error.Error()
+		}
+		m.addMessage("❌ "+errorMsg, MessageTypeError)
+	}
+}
+
+// handleAPIKeyInputMsg handles API key input requests
+func (m *Model) handleAPIKeyInputMsg(msg apiKeyInputMsg) {
+	m.addMessage(msg.prompt, MessageTypeSystem)
+	m.waitingAPIKey = true
+	m.apiKeyProvider = msg.providerType
+	m.input.EchoMode = textinput.EchoPassword
+	m.input.Placeholder = "Enter API key (input hidden for security)..."
+}
+
+// handleAPIKeySubmitMsg handles API key submissions
+func (m *Model) handleAPIKeySubmitMsg(msg apiKeySubmitMsg) (tea.Model, tea.Cmd) {
+	// Validate and configure provider with the API key
+	return *m, tea.Cmd(func() tea.Msg {
+		providerType := ai.ProviderType(msg.providerType)
+		
+		// Validate API key
+		err := m.aiService.ValidateAPIKey(providerType, msg.apiKey)
+		if err != nil {
+			return providerSwitchMsg{
+				providerType: msg.providerType,
+				success:      false,
+				error:        fmt.Errorf("invalid API key: %w", err),
+			}
+		}
+		
+		// Create config and switch provider
+		config := ai.DefaultProviderConfig(providerType)
+		config.APIKey = msg.apiKey
+		
+		err = m.aiService.SwitchProvider(providerType, config)
+		return providerSwitchMsg{
+			providerType: msg.providerType,
+			success:      err == nil,
+			error:        err,
+		}
+	})
 }

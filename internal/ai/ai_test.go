@@ -37,6 +37,7 @@ func TestDefaultProviderConfig(t *testing.T) {
 		{ProviderTypeOpenAI, "gpt-3.5-turbo"},
 		{ProviderTypeAnthropic, "claude-3-sonnet-20240229"},
 		{ProviderTypeOllama, "llama2"},
+		{ProviderTypeOpenRouter, "openai/gpt-3.5-turbo"},
 	}
 	
 	for _, tt := range tests {
@@ -261,5 +262,176 @@ func TestAIError(t *testing.T) {
 	errorString := aiErr.Error()
 	if errorString != "timeout occurred: context deadline exceeded" {
 		t.Errorf("Unexpected error string: %s", errorString)
+	}
+}
+
+func TestOpenRouterProvider(t *testing.T) {
+	config := &ProviderConfig{
+		Name:        "openrouter",
+		APIKey:      "test-openrouter-key",
+		Model:       "openai/gpt-3.5-turbo",
+		Endpoint:    "https://openrouter.ai/api/v1",
+		MaxTokens:   1000,
+		Temperature: 0.7,
+		Timeout:     30000,
+	}
+	
+	provider := NewOpenRouterProvider(config)
+	
+	// Test basic properties
+	if provider.GetName() != "openrouter" {
+		t.Errorf("Expected name 'openrouter', got '%s'", provider.GetName())
+	}
+	
+	if provider.GetModel() != "openai/gpt-3.5-turbo" {
+		t.Errorf("Expected model 'openai/gpt-3.5-turbo', got '%s'", provider.GetModel())
+	}
+	
+	if !provider.IsConfigured() {
+		t.Error("Expected provider to be configured")
+	}
+	
+	// Test validation
+	if err := provider.ValidateConfig(); err != nil {
+		t.Errorf("Provider validation failed: %v", err)
+	}
+}
+
+func TestOpenRouterProviderValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      *ProviderConfig
+		expectError bool
+	}{
+		{
+			name: "valid config",
+			config: &ProviderConfig{
+				APIKey:      "test-key",
+				Model:       "openai/gpt-3.5-turbo",
+				MaxTokens:   1000,
+				Temperature: 0.7,
+			},
+			expectError: false,
+		},
+		{
+			name: "missing API key",
+			config: &ProviderConfig{
+				Model:       "openai/gpt-3.5-turbo",
+				MaxTokens:   1000,
+				Temperature: 0.7,
+			},
+			expectError: true,
+		},
+		{
+			name: "missing model",
+			config: &ProviderConfig{
+				APIKey:      "test-key",
+				MaxTokens:   1000,
+				Temperature: 0.7,
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid max tokens",
+			config: &ProviderConfig{
+				APIKey:      "test-key",
+				Model:       "openai/gpt-3.5-turbo",
+				MaxTokens:   -1,
+				Temperature: 0.7,
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid temperature",
+			config: &ProviderConfig{
+				APIKey:      "test-key",
+				Model:       "openai/gpt-3.5-turbo",
+				MaxTokens:   1000,
+				Temperature: 3.0,
+			},
+			expectError: true,
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := NewOpenRouterProvider(tt.config)
+			err := provider.ValidateConfig()
+			
+			if tt.expectError && err == nil {
+				t.Error("Expected validation error, got none")
+			}
+			
+			if !tt.expectError && err != nil {
+				t.Errorf("Expected no validation error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestProviderFactoryOpenRouter(t *testing.T) {
+	factory := NewProviderFactory()
+	
+	// Test OpenRouter provider creation
+	config := &ProviderConfig{
+		APIKey:      "test-openrouter-key",
+		Model:       "openai/gpt-3.5-turbo",
+		MaxTokens:   1000,
+		Temperature: 0.7,
+	}
+	
+	provider, err := factory.Create(ProviderTypeOpenRouter, config)
+	if err != nil {
+		t.Errorf("Failed to create OpenRouter provider: %v", err)
+	}
+	
+	if provider.GetName() != "openrouter" {
+		t.Errorf("Expected provider name 'openrouter', got '%s'", provider.GetName())
+	}
+	
+	// Test that OpenRouter is in supported providers
+	supportedProviders := factory.GetSupportedProviders()
+	found := false
+	for _, p := range supportedProviders {
+		if p == ProviderTypeOpenRouter {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("OpenRouter provider not found in supported providers")
+	}
+}
+
+func TestOpenRouterProviderWithoutAPIKey(t *testing.T) {
+	config := &ProviderConfig{
+		Model:       "openai/gpt-3.5-turbo",
+		MaxTokens:   1000,
+		Temperature: 0.7,
+	}
+	
+	provider := NewOpenRouterProvider(config)
+	
+	// Provider should not be configured without API key
+	if provider.IsConfigured() {
+		t.Error("Expected provider to not be configured without API key")
+	}
+	
+	// Should return error when trying to complete
+	ctx := context.Background()
+	req := &CompletionRequest{Prompt: "test"}
+	
+	_, err := provider.Complete(ctx, req)
+	if err == nil {
+		t.Error("Expected error when completing without API key")
+	}
+	
+	aiErr, ok := err.(*AIError)
+	if !ok {
+		t.Error("Expected AIError type")
+	}
+	
+	if aiErr.Type != ErrorTypeAuth {
+		t.Errorf("Expected auth error type, got %s", aiErr.Type)
 	}
 }

@@ -218,3 +218,148 @@ func (s *Service) SetPromptBuilder(builder *prompt.PromptBuilder) *Service {
 	s.promptBuilder = builder
 	return s
 }
+
+// GetAvailableModels fetches available models from the current provider
+func (s *Service) GetAvailableModels(ctx context.Context) ([]ModelInfo, error) {
+	if s.provider == nil {
+		return nil, fmt.Errorf("no provider configured")
+	}
+	
+	// Check if provider supports model listing
+	if modelProvider, ok := s.provider.(ModelListProvider); ok {
+		return modelProvider.GetModels(ctx)
+	}
+	
+	// For providers that don't support model listing, return default models
+	return s.getDefaultModels(), nil
+}
+
+// SwitchProvider switches to a different provider
+func (s *Service) SwitchProvider(providerType ProviderType, config *ProviderConfig) error {
+	provider, err := s.factory.Create(providerType, config)
+	if err != nil {
+		return fmt.Errorf("failed to create provider %s: %w", providerType, err)
+	}
+	
+	s.provider = provider
+	return nil
+}
+
+// SwitchModel switches to a different model within the current provider
+func (s *Service) SwitchModel(modelName string) error {
+	if s.provider == nil {
+		return fmt.Errorf("no provider configured")
+	}
+	
+	// Check if provider supports model switching
+	if modelSwitcher, ok := s.provider.(ModelSwitcher); ok {
+		return modelSwitcher.SwitchModel(modelName)
+	}
+	
+	// For providers that don't support dynamic model switching,
+	// we would need to recreate the provider with new config
+	return fmt.Errorf("current provider does not support dynamic model switching")
+}
+
+// GetProviderStatus returns status information for all supported providers
+func (s *Service) GetProviderStatus() map[ProviderType]ProviderStatusInfo {
+	status := make(map[ProviderType]ProviderStatusInfo)
+	supportedProviders := s.factory.GetSupportedProviders()
+	
+	for _, providerType := range supportedProviders {
+		// Create a test config to check if provider can be configured
+		defaultConfig := DefaultProviderConfig(providerType)
+		provider, err := s.factory.Create(providerType, defaultConfig)
+		
+		statusInfo := ProviderStatusInfo{
+			Type:      providerType,
+			Available: err == nil,
+			Current:   s.provider != nil && s.provider.GetName() == string(providerType),
+		}
+		
+		if provider != nil {
+			statusInfo.Configured = provider.IsConfigured()
+		}
+		
+		status[providerType] = statusInfo
+	}
+	
+	return status
+}
+
+// GetCurrentProviderType returns the type of the current provider
+func (s *Service) GetCurrentProviderType() ProviderType {
+	if s.provider == nil {
+		return ""
+	}
+	
+	return ProviderType(s.provider.GetName())
+}
+
+// ValidateAPIKey validates an API key for a specific provider
+func (s *Service) ValidateAPIKey(providerType ProviderType, apiKey string) error {
+	config := DefaultProviderConfig(providerType)
+	config.APIKey = apiKey
+	
+	provider, err := s.factory.Create(providerType, config)
+	if err != nil {
+		return fmt.Errorf("failed to create provider: %w", err)
+	}
+	
+	// Test connection with the API key
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	if testProvider, ok := provider.(ConnectionTester); ok {
+		return testProvider.TestConnection(ctx)
+	}
+	
+	// Basic validation
+	return provider.ValidateConfig()
+}
+
+// getDefaultModels returns default models for providers that don't support dynamic listing
+func (s *Service) getDefaultModels() []ModelInfo {
+	if s.provider == nil {
+		return []ModelInfo{}
+	}
+	
+	providerName := s.provider.GetName()
+	currentModel := s.provider.GetModel()
+	
+	var models []ModelInfo
+	
+	switch providerName {
+	case "openai":
+		models = []ModelInfo{
+			{ID: "gpt-3.5-turbo", Name: "GPT-3.5 Turbo", Description: "Fast and efficient", Pricing: "$0.5/1M tokens"},
+			{ID: "gpt-4", Name: "GPT-4", Description: "Most capable model", Pricing: "$15/1M tokens"},
+			{ID: "gpt-4-turbo", Name: "GPT-4 Turbo", Description: "Latest GPT-4", Pricing: "$10/1M tokens"},
+		}
+	case "anthropic":
+		models = []ModelInfo{
+			{ID: "claude-3-haiku-20240307", Name: "Claude 3 Haiku", Description: "Fast and efficient", Pricing: "$0.25/1M tokens"},
+			{ID: "claude-3-sonnet-20240229", Name: "Claude 3 Sonnet", Description: "Balanced performance", Pricing: "$3/1M tokens"},
+			{ID: "claude-3-opus-20240229", Name: "Claude 3 Opus", Description: "Most capable", Pricing: "$15/1M tokens"},
+		}
+	case "ollama":
+		models = []ModelInfo{
+			{ID: "llama2", Name: "Llama 2", Description: "Open source model", Pricing: "Free (local)"},
+			{ID: "codellama", Name: "Code Llama", Description: "Code-focused model", Pricing: "Free (local)"},
+			{ID: "mistral", Name: "Mistral", Description: "Efficient model", Pricing: "Free (local)"},
+		}
+	default:
+		models = []ModelInfo{
+			{ID: currentModel, Name: currentModel, Description: "Current model", Current: true},
+		}
+	}
+	
+	// Mark current model
+	for i := range models {
+		if models[i].ID == currentModel {
+			models[i].Current = true
+		}
+	}
+	
+	return models
+}
