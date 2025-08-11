@@ -37,8 +37,12 @@ func (m Model) View() string {
 
 // renderStatusBar renders the top status bar
 func (m Model) renderStatusBar() string {
-	// Left side: application name and status
-	leftStatus := statusStyle.Render(fmt.Sprintf("clia • %s", m.status))
+	// Left side: application name and status with optional spinner
+	statusText := m.status
+	if m.showSpinner {
+		statusText = fmt.Sprintf("%s %s", m.spinner.View(), statusText)
+	}
+	leftStatus := statusStyle.Render(fmt.Sprintf("clia • %s", statusText))
 	
 	// Right side: message count and dimensions
 	rightStatus := encodingStyle.Render(fmt.Sprintf("Messages: %d | %dx%d", 
@@ -65,10 +69,19 @@ func (m Model) renderContent() string {
 
 // renderInputArea renders the input field
 func (m Model) renderInputArea() string {
-	// Determine input style based on focus
-	style := inputStyle
-	if m.input.Focused() {
+	// Determine input style based on focus and processing state
+	var style lipgloss.Style
+	if m.processing {
+		// Pulsing effect during processing
+		if m.pulseFrame%20 < 10 { // 50% of the cycle
+			style = inputStyle.BorderForeground(pulseColor1)
+		} else {
+			style = inputStyle.BorderForeground(pulseColor2)
+		}
+	} else if m.input.Focused() {
 		style = focusedInputStyle
+	} else {
+		style = inputStyle
 	}
 	
 	// Render the input with label

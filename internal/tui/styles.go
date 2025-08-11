@@ -56,6 +56,11 @@ var (
 			Padding(0, 1)
 
 	focusedInputStyle = inputStyle.BorderForeground(lipgloss.Color("69"))
+	
+	
+	// Pulsing colors for animation
+	pulseColor1 = lipgloss.Color("69")  // Blue
+	pulseColor2 = lipgloss.Color("117") // Light blue
 
 	// Help text style
 	helpStyle = lipgloss.NewStyle().

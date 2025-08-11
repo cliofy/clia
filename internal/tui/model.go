@@ -36,6 +36,13 @@ type Model struct {
 	processing   bool
 	suggestions  []aiSuggestion
 	
+	// Animation state
+	spinner         Spinner
+	animationTicker int
+	showSpinner     bool
+	pulseFrame      int
+	thinkingDots    string
+	
 	// Command state
 	commandMode     bool
 	waitingAPIKey   bool
@@ -116,6 +123,12 @@ func New() Model {
 		configManager:   configManager,
 		currentProvider: currentProvider,
 		currentModel:    currentModel,
+		// Animation state
+		spinner:         ProcessingSpinner,
+		animationTicker: 0,
+		showSpinner:     false,
+		pulseFrame:      0,
+		thinkingDots:    "",
 	}
 
 	// Add welcome message
@@ -151,6 +164,14 @@ func (m *Model) addMessage(content string, msgType MessageType) {
 	}
 	m.messages = append(m.messages, msg)
 	m.updateViewportContent()
+}
+
+// removeLastMessage removes the last message (used for removing thinking bubble)
+func (m *Model) removeLastMessage() {
+	if len(m.messages) > 0 {
+		m.messages = m.messages[:len(m.messages)-1]
+		m.updateViewportContent()
+	}
 }
 
 // clearMessages clears all messages from history
@@ -245,11 +266,20 @@ func (m *Model) handleAIRequest(input string) tea.Cmd {
 	// Clear input and set processing state
 	m.input.SetValue("")
 	m.processing = true
+	m.showSpinner = true
+	m.spinner = m.spinner.Reset() // Reset spinner to start fresh
+	m.thinkingDots = ""
 	m.status = "Processing..."
+	
+	// Add thinking bubble message
+	m.addMessage("🤖 思考中...", MessageTypeSystem)
 
 	// Request AI suggestions
-	return tea.Sequence(
+	// Return combined commands including animation ticker
+	return tea.Batch(
 		AIProcessingCmd(),
+		StartAnimationCmd(),
+		m.spinner.TickCmd(), // Start the spinner animation
 		tea.Cmd(func() tea.Msg {
 			// Run AI request in background
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -399,6 +429,10 @@ func (m *Model) handleAPIKeyInput(input string) tea.Cmd {
 // handleAIResponse handles AI response messages
 func (m *Model) handleAIResponse(msg aiResponseMsg) {
 	m.processing = false
+	m.showSpinner = false // Stop the spinner
+	
+	// Remove thinking bubble message
+	m.removeLastMessage()
 	
 	if msg.error != nil {
 		// Handle AI error with more context
@@ -420,7 +454,7 @@ func (m *Model) handleAIResponse(msg aiResponseMsg) {
 	
 	if len(msg.suggestions) == 0 {
 		m.addMessage("No command suggestions available", MessageTypeSystem)
-		m.status = "Ready"
+		m.status = fmt.Sprintf("Ready - %s • %s", m.currentProvider, m.currentModel)
 		return
 	}
 	
@@ -443,5 +477,5 @@ func (m *Model) handleAIResponse(msg aiResponseMsg) {
 	
 	// Add instruction message
 	m.addMessage("Use 1-9 to select a command, or type a new request", MessageTypeSystem)
-	m.status = "Ready"
+	m.status = fmt.Sprintf("Ready - %s • %s", m.currentProvider, m.currentModel)
 }

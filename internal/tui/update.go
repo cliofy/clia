@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -69,6 +70,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 	case apiKeySubmitMsg:
 		return m.handleAPIKeySubmitMsg(msg)
+		
+	case SpinnerTickMsg:
+		if m.showSpinner {
+			m.spinner = m.spinner.NextFrame()
+			cmds = append(cmds, m.spinner.TickCmd())
+		}
+		// Update pulse frame for input animation
+		if m.processing {
+			m.pulseFrame++
+			// Update thinking dots animation
+			dotsCount := (m.pulseFrame / 10) % 4 // Change every 10 ticks, cycle through 0-3 dots
+			switch dotsCount {
+			case 0:
+				m.thinkingDots = ""
+			case 1:
+				m.thinkingDots = "."
+			case 2:
+				m.thinkingDots = ".."
+			case 3:
+				m.thinkingDots = "..."
+			}
+			// Update the last message if it's a thinking message
+			if len(m.messages) > 0 && strings.Contains(m.messages[len(m.messages)-1].Content, "思考中") {
+				m.messages[len(m.messages)-1].Content = fmt.Sprintf("🤖 思考中%s", m.thinkingDots)
+				m.updateViewportContent()
+			}
+		}
+		
+	case startAnimationMsg:
+		// Animation started, no additional action needed
+		
+	case stopAnimationMsg:
+		m.showSpinner = false
+		m.pulseFrame = 0 // Reset pulse frame
 
 	default:
 		// Update input component
@@ -87,22 +122,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// handleKeyInput processes specific key inputs
-func (m *Model) handleKeyInput(key string) tea.Cmd {
-	switch key {
-	case "ctrl+c":
-		return tea.Quit
-	case "ctrl+l":
-		return ClearHistoryCmd()
-	case "enter":
-		input := m.input.Value()
-		if input != "" {
-			m.input.SetValue("")
-			return AddMessageCmd(input, MessageTypeUser)
-		}
-	}
-	return nil
-}
 
 // handleProviderSwitchMsg handles provider switch results
 func (m *Model) handleProviderSwitchMsg(msg providerSwitchMsg) {
