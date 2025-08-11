@@ -1,13 +1,16 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/yourusername/clia/internal/ai"
 	"github.com/yourusername/clia/internal/version"
 )
 
@@ -25,6 +28,11 @@ type Model struct {
 	
 	// Status information
 	status string
+	
+	// AI service
+	aiService    *ai.Service
+	processing   bool
+	suggestions  []aiSuggestion
 }
 
 // New creates a new TUI model
@@ -40,12 +48,29 @@ func New() Model {
 	vp := viewport.New(80, 20)
 	vp.SetContent("")
 
+	// Initialize AI service
+	aiService := ai.NewService().SetFallbackMode(true)
+	
+	// Try to configure OpenAI provider if API key is available
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		config := ai.DefaultProviderConfig(ai.ProviderTypeOpenAI)
+		config.APIKey = apiKey
+		
+		if err := aiService.SetProviderByConfig(ai.ProviderTypeOpenAI, config); err != nil {
+			// Log error but continue without AI (will use fallback)
+			fmt.Printf("Warning: Failed to configure AI provider: %v\n", err)
+		}
+	}
+	
 	// Create initial model
 	model := Model{
-		input:    ti,
-		viewport: vp,
-		messages: []Message{},
-		status:   "Ready",
+		input:       ti,
+		viewport:    vp,
+		messages:    []Message{},
+		status:      "Ready",
+		aiService:   aiService,
+		processing:  false,
+		suggestions: []aiSuggestion{},
 	}
 
 	// Add welcome message
@@ -124,28 +149,76 @@ func (m *Model) handleInputSubmit() tea.Cmd {
 	// Add user message to history
 	m.addMessage(input, MessageTypeUser)
 
-	// Clear input
+	// Clear input and set processing state
 	m.input.SetValue("")
-
-	// For now, just echo the input as a system response
-	// This will be replaced with actual LLM integration in Phase 2
+	m.processing = true
 	m.status = "Processing..."
-	
+
+	// Request AI suggestions
 	return tea.Sequence(
-		tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
-			return echoResponseMsg{input}
+		AIProcessingCmd(),
+		tea.Cmd(func() tea.Msg {
+			// Run AI request in background
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			
+			response, err := m.aiService.SuggestCommands(ctx, input)
+			if err != nil {
+				return aiResponseMsg{error: err}
+			}
+			
+			// Convert AI suggestions to TUI suggestions
+			var suggestions []aiSuggestion
+			for _, cmd := range response.Suggestions {
+				suggestions = append(suggestions, aiSuggestion{
+					Command:     cmd.Command,
+					Description: cmd.Description,
+					Safe:        cmd.Safe,
+					Confidence:  cmd.Confidence,
+				})
+			}
+			
+			return aiResponseMsg{suggestions: suggestions}
 		}),
 	)
 }
 
-// echoResponseMsg represents a mock response for Phase 1
-type echoResponseMsg struct {
-	input string
-}
-
-// handleEchoResponse handles the mock echo response
-func (m *Model) handleEchoResponse(msg echoResponseMsg) {
-	response := fmt.Sprintf("Echo: %s (Phase 2 will add LLM processing)", msg.input)
-	m.addMessage(response, MessageTypeAssistant)
+// handleAIResponse handles AI response messages
+func (m *Model) handleAIResponse(msg aiResponseMsg) {
+	m.processing = false
+	
+	if msg.error != nil {
+		// Handle AI error
+		errorMsg := fmt.Sprintf("AI Error: %s", msg.error.Error())
+		m.addMessage(errorMsg, MessageTypeError)
+		m.status = "Error"
+		return
+	}
+	
+	if len(msg.suggestions) == 0 {
+		m.addMessage("No command suggestions available", MessageTypeSystem)
+		m.status = "Ready"
+		return
+	}
+	
+	// Store suggestions for potential selection
+	m.suggestions = msg.suggestions
+	
+	// Display suggestions
+	for i, suggestion := range msg.suggestions {
+		safetyIndicator := "✓"
+		if !suggestion.Safe {
+			safetyIndicator = "⚠"
+		}
+		
+		confidencePercent := int(suggestion.Confidence * 100)
+		suggestionText := fmt.Sprintf("%d. %s %s (%d%% confidence)\n   %s", 
+			i+1, safetyIndicator, suggestion.Command, confidencePercent, suggestion.Description)
+		
+		m.addMessage(suggestionText, MessageTypeAssistant)
+	}
+	
+	// Add instruction message
+	m.addMessage("Use 1-9 to select a command, or type a new request", MessageTypeSystem)
 	m.status = "Ready"
 }

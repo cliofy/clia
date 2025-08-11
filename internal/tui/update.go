@@ -41,8 +41,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case addMessageMsg:
 		m.addMessage(msg.Content, msg.Type)
 
-	case echoResponseMsg:
-		m.handleEchoResponse(msg)
+	case aiProcessingMsg:
+		// Just update UI, processing state already set
+		
+	case aiResponseMsg:
+		m.handleAIResponse(msg)
 
 	default:
 		// Update input component

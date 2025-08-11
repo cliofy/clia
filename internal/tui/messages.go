@@ -58,3 +58,49 @@ func AddMessageCmd(content string, msgType MessageType) tea.Cmd {
 		}
 	}
 }
+
+// aiRequestMsg represents an AI request being processed
+type aiRequestMsg struct {
+	input string
+}
+
+// AIRequestCmd returns a command to process an AI request
+func AIRequestCmd(input string) tea.Cmd {
+	return func() tea.Msg {
+		return aiRequestMsg{input: input}
+	}
+}
+
+// aiResponseMsg represents an AI response
+type aiResponseMsg struct {
+	suggestions []aiSuggestion
+	error       error
+}
+
+// aiSuggestion represents a command suggestion from AI
+type aiSuggestion struct {
+	Command     string
+	Description string
+	Safe        bool
+	Confidence  float64
+}
+
+// AIResponseCmd returns a command with AI response
+func AIResponseCmd(suggestions []aiSuggestion, err error) tea.Cmd {
+	return func() tea.Msg {
+		return aiResponseMsg{
+			suggestions: suggestions,
+			error:       err,
+		}
+	}
+}
+
+// aiProcessingMsg indicates AI is processing
+type aiProcessingMsg struct{}
+
+// AIProcessingCmd returns a processing indicator command
+func AIProcessingCmd() tea.Cmd {
+	return func() tea.Msg {
+		return aiProcessingMsg{}
+	}
+}
