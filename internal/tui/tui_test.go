@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -257,5 +258,110 @@ func TestExecutionStateReset(t *testing.T) {
 	
 	if model.streamActive {
 		t.Error("Expected streamActive to be false after stream completion")
+	}
+}
+
+func TestDirectCommandExecution(t *testing.T) {
+	model := New()
+	
+	tests := []struct {
+		name        string
+		input       string
+		expectError bool
+		expectExec  bool
+	}{
+		{"Valid direct command", "!ls", false, true},
+		{"Direct command with args", "!ls -la", false, true},
+		{"Empty direct command", "!", true, false},
+		{"Space only after !", "! ", true, false},
+		{"Regular input", "list files", false, false},
+		{"Slash command", "/help", false, false},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear messages
+			model.messages = []Message{}
+			model.executingCommand = false
+			
+			// Set input
+			model.input.SetValue(tt.input)
+			
+			// Process input
+			cmd := model.handleInputSubmit()
+			
+			if tt.expectError {
+				// Should have error message in history
+				found := false
+				for _, msg := range model.messages {
+					if msg.Type == MessageTypeError && strings.Contains(msg.Content, "Empty direct command") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected error message for input %s", tt.input)
+				}
+			}
+			
+			if tt.expectExec {
+				// Should have execution message and command should be set
+				found := false
+				for _, msg := range model.messages {
+					if msg.Type == MessageTypeSystem && strings.Contains(msg.Content, "Direct execution") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected direct execution message for input %s", tt.input)
+				}
+				
+				if cmd == nil {
+					t.Errorf("Expected command to be returned for execution of %s", tt.input)
+				}
+			}
+			
+			if !tt.expectExec && !tt.expectError {
+				// Regular processing - should not have direct execution message
+				for _, msg := range model.messages {
+					if strings.Contains(msg.Content, "Direct execution") {
+						t.Errorf("Did not expect direct execution message for input %s", tt.input)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDirectCommandNoSafetyChecks(t *testing.T) {
+	model := New()
+	
+	// Test that dangerous commands execute directly without safety checks
+	dangerousCommand := "!rm -rf /tmp/test"
+	model.input.SetValue(dangerousCommand)
+	
+	cmd := model.handleInputSubmit()
+	
+	// Should return a command for execution (no safety blocking)
+	if cmd == nil {
+		t.Error("Expected dangerous direct command to return execution command")
+	}
+	
+	// Should have direct execution message
+	found := false
+	for _, msg := range model.messages {
+		if msg.Type == MessageTypeSystem && strings.Contains(msg.Content, "Direct execution (no safety checks)") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected direct execution message with no safety checks warning")
+	}
+	
+	// Should NOT have confirmation dialog
+	if model.inConfirmationMode {
+		t.Error("Expected no confirmation dialog for direct command execution")
 	}
 }

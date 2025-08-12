@@ -70,10 +70,15 @@ func GetCommandHelp() string {
   /status                - Show current configuration status
   /help                  - Show this help message
 
+Direct command execution:
+  !<command>             - Execute command directly without AI processing or safety checks
+
 Examples:
   /provider openrouter   - Switch to OpenRouter provider
   /model openai/gpt-4    - Switch to GPT-4 model via OpenRouter
-  /status                - Show current provider and model`
+  /status                - Show current provider and model
+  !ls -la                - Execute 'ls -la' command directly
+  !pwd                   - Execute 'pwd' command directly`
 }
 
 // ValidateProviderCommand validates provider command arguments

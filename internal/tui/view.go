@@ -101,7 +101,7 @@ func (m Model) renderInputArea() string {
 
 // renderHelp renders the help text at the bottom
 func (m Model) renderHelp() string {
-	helpText := "Press Ctrl+C to quit • Ctrl+L to clear history • Enter to submit"
+	helpText := "Press Ctrl+C to quit • Ctrl+L to clear history • Enter to submit • !<command> for direct execution"
 	return helpStyle.
 		Width(m.width).
 		Render(helpText)

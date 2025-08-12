@@ -298,6 +298,11 @@ func (m *Model) handleInputSubmit() tea.Cmd {
 		return m.handleAPIKeyInput(input)
 	}
 
+	// Handle direct command execution (starting with '!')
+	if strings.HasPrefix(input, "!") {
+		return m.handleDirectCommand(input)
+	}
+
 	// Check if input is a command
 	if cmd := ParseCommand(input); cmd != nil {
 		return m.handleCommand(cmd)
@@ -918,6 +923,33 @@ func (m *Model) handleEditModeInput() tea.Cmd {
 	
 	// In edit mode, Enter saves and executes the command
 	return m.exitEditMode(true)
+}
+
+// handleDirectCommand handles direct command execution (starting with '!')
+func (m *Model) handleDirectCommand(input string) tea.Cmd {
+	// Extract the actual command by removing the '!' prefix
+	if len(input) < 2 {
+		m.addMessage("❌ Empty direct command. Usage: !<command>", MessageTypeError)
+		m.input.SetValue("")
+		return nil
+	}
+	
+	command := strings.TrimSpace(input[1:])
+	if command == "" {
+		m.addMessage("❌ Empty direct command. Usage: !<command>", MessageTypeError)
+		m.input.SetValue("")
+		return nil
+	}
+	
+	// Add user input to history
+	m.addMessage(input, MessageTypeUser)
+	m.input.SetValue("")
+	
+	// Show direct execution message (no safety checks warning)
+	m.addMessage(fmt.Sprintf("⚡ Direct execution (no safety checks): %s", command), MessageTypeSystem)
+	
+	// Execute command directly without any safety checks or confirmations
+	return m.executeCommand(command, "Direct command execution")
 }
 
 // handleCommandStreamStart handles the start of a command stream
