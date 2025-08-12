@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/yourusername/clia/internal/executor"
 )
 
 func TestNewModel(t *testing.T) {
@@ -166,5 +167,95 @@ func TestFormatMessage(t *testing.T) {
 			// The formatted message should contain the original content
 			// Note: We can't easily test the exact formatted output due to styling
 		})
+	}
+}
+
+func TestSequentialCommandExecution(t *testing.T) {
+	model := New()
+	
+	// Simulate first command execution - should set executingCommand to true
+	firstCmd := commandExecutionMsg{
+		command:     "ls",
+		description: "List files",
+		safe:        true,
+		confidence:  0.9,
+	}
+	
+	// Execute first command
+	cmd := model.handleCommandExecution(firstCmd)
+	if cmd == nil {
+		t.Error("Expected command execution to return a command")
+	}
+	
+	// Verify execution state is set
+	if !model.executingCommand {
+		t.Error("Expected executingCommand to be true after starting execution")
+	}
+	
+	// Simulate stream completion by manually calling the stream end logic
+	// This simulates what happens when a stream closes in handleStreamTick
+	model.streamActive = false
+	model.outputStream = nil
+	model.executingCommand = false
+	model.currentCommand = ""
+	model.currentPID = 0
+	
+	// Now try to execute a second command - should succeed
+	secondCmd := commandExecutionMsg{
+		command:     "pwd",
+		description: "Print working directory",
+		safe:        true,
+		confidence:  0.9,
+	}
+	
+	// This should not fail with "Another command is already running"
+	cmd2 := model.handleCommandExecution(secondCmd)
+	if cmd2 == nil {
+		t.Error("Expected second command execution to succeed and return a command")
+	}
+	
+	// Verify that the second command can start execution
+	if !model.executingCommand {
+		t.Error("Expected executingCommand to be true after starting second execution")
+	}
+}
+
+func TestExecutionStateReset(t *testing.T) {
+	model := New()
+	
+	// Set execution state as if a command is running
+	model.executingCommand = true
+	model.currentCommand = "test-command"
+	model.currentPID = 12345
+	model.streamActive = true
+	
+	// Simulate stream completion by calling handleStreamTick with closed channel
+	outputChan := make(chan executor.OutputLine)
+	close(outputChan)
+	model.outputStream = outputChan
+	
+	// Call handleStreamTick - this should detect the closed channel and reset state
+	cmd := model.handleStreamTick()
+	
+	// Verify command returned is nil (no more ticking needed)
+	if cmd != nil {
+		t.Error("Expected handleStreamTick to return nil when stream is closed")
+	}
+	
+	// This should reset all execution state
+	if model.executingCommand {
+		t.Error("Expected executingCommand to be false after stream completion")
+	}
+	
+	if model.currentCommand != "" {
+		t.Error("Expected currentCommand to be empty after stream completion")
+	}
+	
+	if model.currentPID != 0 {
+		t.Error("Expected currentPID to be 0 after stream completion")
+	}
+	
+	if model.streamActive {
+		t.Error("Expected streamActive to be false after stream completion")
 	}
 }

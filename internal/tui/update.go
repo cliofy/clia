@@ -33,6 +33,84 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+			// Handle number key selection when in selection mode
+			if m.inSelectionMode {
+				// Convert string to int and adjust for 0-based indexing
+				index := int(msg.String()[0] - '1') // '1' -> 0, '2' -> 1, etc.
+				if cmd := m.handleCommandSelection(index); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			} else {
+				// Not in selection mode, handle as regular input
+				m.input, cmd = m.input.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+
+		case "e":
+			// Handle edit command when in selection mode
+			if m.inSelectionMode {
+				// Enter edit mode with the first available suggestion
+				if len(m.availableSuggestions) > 0 {
+					m.enterEditMode(m.availableSuggestions[0])
+				} else {
+					m.addMessage("❌ No commands available to edit", MessageTypeError)
+				}
+			} else {
+				// Not in selection mode, handle as regular input
+				m.input, cmd = m.input.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+
+		case "escape":
+			// Handle escape key
+			if m.inEditMode {
+				// Exit edit mode without saving
+				if cmd := m.exitEditMode(false); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			} else if m.inSelectionMode {
+				// Exit selection mode
+				m.inSelectionMode = false
+				m.availableSuggestions = []aiSuggestion{}
+				m.addMessage("Selection mode cancelled", MessageTypeSystem)
+			} else {
+				// Clear input in normal mode
+				m.input.SetValue("")
+			}
+
+		case "y", "Y":
+			// Handle confirmation - confirm command execution
+			if m.inConfirmationMode {
+				if cmd := m.handleConfirmationResponse(true); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			} else {
+				// Not in confirmation mode, handle as regular input
+				m.input, cmd = m.input.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+
+		case "n", "N":
+			// Handle confirmation - cancel command execution
+			if m.inConfirmationMode {
+				if cmd := m.handleConfirmationResponse(false); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			} else {
+				// Not in confirmation mode, handle as regular input
+				m.input, cmd = m.input.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+
 		default:
 			// Handle regular input
 			m.input, cmd = m.input.Update(msg)
@@ -70,6 +148,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 	case apiKeySubmitMsg:
 		return m.handleAPIKeySubmitMsg(msg)
+
+	case commandSelectionMsg:
+		if cmd := m.handleCommandSelection(msg.index); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case commandExecutionMsg:
+		if cmd := m.handleCommandExecution(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case confirmationRequestMsg:
+		m.handleConfirmationRequest(msg)
+
+	case confirmationResponseMsg:
+		m.handleConfirmationResponseMsg(msg)
+
+	case commandStartMsg:
+		m.handleCommandStart(msg)
+
+	case commandOutputMsg:
+		m.handleCommandOutput(msg)
+
+	case commandCompleteMsg:
+		m.handleCommandComplete(msg)
+
+	case commandErrorMsg:
+		m.handleCommandError(msg)
+
+	case commandStreamStartMsg:
+		if cmd := m.handleCommandStreamStart(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case streamTickMsg:
+		if cmd := m.handleStreamTick(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case streamEndMsg:
+		m.handleStreamEnd(msg)
 		
 	case SpinnerTickMsg:
 		if m.showSpinner {

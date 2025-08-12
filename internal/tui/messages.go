@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"time"
+	
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/yourusername/clia/internal/ai"
+	"github.com/yourusername/clia/internal/executor"
 )
 
 // Message represents a message in the chat history
@@ -208,6 +211,206 @@ func APIKeySubmitCmd(providerType, apiKey string) tea.Cmd {
 		return apiKeySubmitMsg{
 			providerType: providerType,
 			apiKey:       apiKey,
+		}
+	}
+}
+
+// Command selection messages
+
+// commandSelectionMsg represents a command selection by number
+type commandSelectionMsg struct {
+	index int // 0-based index (user inputs 1-9, we convert to 0-8)
+}
+
+// CommandSelectionCmd returns a command to select a suggestion by index
+func CommandSelectionCmd(index int) tea.Cmd {
+	return func() tea.Msg {
+		return commandSelectionMsg{
+			index: index,
+		}
+	}
+}
+
+// commandExecutionMsg represents a command execution request
+type commandExecutionMsg struct {
+	command     string
+	description string
+	safe        bool
+	confidence  float64
+}
+
+// CommandExecutionCmd returns a command to execute a selected command
+func CommandExecutionCmd(command, description string, safe bool, confidence float64) tea.Cmd {
+	return func() tea.Msg {
+		return commandExecutionMsg{
+			command:     command,
+			description: description,
+			safe:        safe,
+			confidence:  confidence,
+		}
+	}
+}
+
+// Confirmation dialog messages
+
+// confirmationRequestMsg represents a confirmation request for a command
+type confirmationRequestMsg struct {
+	command     string
+	description string
+	reason      string // Why confirmation is needed
+}
+
+// ConfirmationRequestCmd returns a command to request confirmation
+func ConfirmationRequestCmd(command, description, reason string) tea.Cmd {
+	return func() tea.Msg {
+		return confirmationRequestMsg{
+			command:     command,
+			description: description,
+			reason:      reason,
+		}
+	}
+}
+
+// confirmationResponseMsg represents user's response to confirmation dialog
+type confirmationResponseMsg struct {
+	confirmed bool
+	command   commandExecutionMsg // The command that was confirmed/rejected
+}
+
+// ConfirmationResponseCmd returns a command with confirmation response
+func ConfirmationResponseCmd(confirmed bool, command commandExecutionMsg) tea.Cmd {
+	return func() tea.Msg {
+		return confirmationResponseMsg{
+			confirmed: confirmed,
+			command:   command,
+		}
+	}
+}
+
+// Command execution lifecycle messages
+
+// commandStartMsg represents the start of command execution
+type commandStartMsg struct {
+	command     string
+	pid         int
+	description string
+}
+
+// CommandStartCmd returns a command indicating command execution has started
+func CommandStartCmd(command string, pid int, description string) tea.Cmd {
+	return func() tea.Msg {
+		return commandStartMsg{
+			command:     command,
+			pid:         pid,
+			description: description,
+		}
+	}
+}
+
+// commandOutputMsg represents output from a running command
+type commandOutputMsg struct {
+	content   string
+	isStderr  bool
+	timestamp time.Time
+}
+
+// CommandOutputCmd returns a command with command output
+func CommandOutputCmd(content string, isStderr bool) tea.Cmd {
+	return func() tea.Msg {
+		return commandOutputMsg{
+			content:   content,
+			isStderr:  isStderr,
+			timestamp: time.Now(),
+		}
+	}
+}
+
+// commandCompleteMsg represents command execution completion
+type commandCompleteMsg struct {
+	command   string
+	exitCode  int
+	duration  time.Duration
+	stdout    string
+	stderr    string
+	error     error
+}
+
+// CommandCompleteCmd returns a command indicating command execution is complete
+func CommandCompleteCmd(command string, exitCode int, duration time.Duration, stdout, stderr string, err error) tea.Cmd {
+	return func() tea.Msg {
+		return commandCompleteMsg{
+			command:  command,
+			exitCode: exitCode,
+			duration: duration,
+			stdout:   stdout,
+			stderr:   stderr,
+			error:    err,
+		}
+	}
+}
+
+// commandErrorMsg represents an error during command execution
+type commandErrorMsg struct {
+	command string
+	error   error
+}
+
+// CommandErrorCmd returns a command with execution error
+func CommandErrorCmd(command string, err error) tea.Cmd {
+	return func() tea.Msg {
+		return commandErrorMsg{
+			command: command,
+			error:   err,
+		}
+	}
+}
+
+// Stream processing messages
+
+// streamTickMsg represents a tick to check for new output
+type streamTickMsg struct{}
+
+// StreamTickCmd returns a command to check for stream output
+func StreamTickCmd() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		return streamTickMsg{}
+	})
+}
+
+// streamEndMsg represents the end of stream
+type streamEndMsg struct {
+	command  string
+	exitCode int
+	duration time.Duration
+	error    error
+}
+
+// StreamEndCmd returns a command indicating stream has ended
+func StreamEndCmd(command string, exitCode int, duration time.Duration, err error) tea.Cmd {
+	return func() tea.Msg {
+		return streamEndMsg{
+			command:  command,
+			exitCode: exitCode,
+			duration: duration,
+			error:    err,
+		}
+	}
+}
+
+// commandStreamStartMsg represents the start of a command stream
+type commandStreamStartMsg struct {
+	command     string
+	description string
+	stream      <-chan executor.OutputLine
+}
+
+// CommandStreamStartCmd returns a command to start a command stream
+func CommandStreamStartCmd(command, description string, stream <-chan executor.OutputLine) tea.Cmd {
+	return func() tea.Msg {
+		return commandStreamStartMsg{
+			command:     command,
+			description: description,
+			stream:      stream,
 		}
 	}
 }
