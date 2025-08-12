@@ -11,16 +11,18 @@ import (
 
 	"github.com/yourusername/clia/internal/ai"
 	"github.com/yourusername/clia/internal/executor"
+	"github.com/yourusername/clia/pkg/utils"
 )
 
 // CLITUIState represents the current state of the CLI TUI
 type CLITUIState int
 
 const (
-	StateSelecting CLITUIState = iota // Selecting from suggestions
-	StateEditing                      // Editing the selected command
-	StateExecuting                    // Executing command
-	StateCompleted                    // Command completed, ready to exit
+	StateSelecting  CLITUIState = iota // Selecting from suggestions
+	StateEditing                       // Editing the selected command
+	StateCompleting                    // Path completion mode
+	StateExecuting                     // Executing command
+	StateCompleted                     // Command completed, ready to exit
 )
 
 // CLITUIModel represents the CLI-specific TUI model
@@ -36,6 +38,12 @@ type CLITUIModel struct {
 	// Editing state
 	input         textinput.Model
 	editingCommand string
+	
+	// Path completion state
+	completionCandidates []string                      // List of completion candidates
+	completionIndex      int                           // Currently selected completion index
+	completionContext    *utils.PathCompletionContext // Context for current completion
+	inCompletionMode     bool                          // Whether we're in completion mode
 	
 	// Execution state
 	executor      *executor.Executor
@@ -57,12 +65,18 @@ func NewCLITUIModel(userRequest string, suggestions []ai.CommandSuggestion) CLIT
 	input.Width = 80
 	
 	return CLITUIModel{
-		state:        StateSelecting,
-		userRequest:  userRequest,
-		suggestions:  suggestions,
+		state:         StateSelecting,
+		userRequest:   userRequest,
+		suggestions:   suggestions,
 		selectedIndex: 0,
-		input:        input,
-		executor:     executor.New(),
+		input:         input,
+		// Initialize path completion state
+		completionCandidates: []string{},
+		completionIndex:      0,
+		completionContext:    nil,
+		inCompletionMode:     false,
+		// Initialize execution state
+		executor:        executor.New(),
 		executionOutput: []string{},
 	}
 }
@@ -86,6 +100,8 @@ func (m CLITUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSelecting(msg)
 		case StateEditing:
 			return m.updateEditing(msg)
+		case StateCompleting:
+			return m.updateCompleting(msg)
 		case StateExecuting:
 			return m.updateExecuting(msg)
 		case StateCompleted:
@@ -140,6 +156,9 @@ func (m CLITUIModel) updateEditing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.executionOutput = []string{}
 			return m, m.executeCommand(command)
 		}
+	case "tab":
+		// Trigger path completion
+		return m.handleTabCompletion()
 	case "esc":
 		// Go back to selection
 		m.state = StateSelecting
@@ -192,6 +211,8 @@ func (m CLITUIModel) View() string {
 		return m.viewSelecting()
 	case StateEditing:
 		return m.viewEditing()
+	case StateCompleting:
+		return m.viewCompleting()
 	case StateExecuting:
 		return m.viewExecuting()
 	case StateCompleted:
@@ -235,13 +256,13 @@ func (m CLITUIModel) viewSelecting() string {
 
 // viewEditing renders the CLI-style command editing interface
 func (m CLITUIModel) viewEditing() string {
-	header := "✏️  Edit command (press Enter to execute, Esc to go back):\n\n"
+	header := "✏️  Edit command (press Enter to execute, Tab for path completion):\n\n"
 	
 	inputLine := fmt.Sprintf("$ %s", m.input.View())
 	
 	footer := "\n" + subtleStyle.Render("enter: execute") + dotStyle + 
-			subtleStyle.Render("esc: back") + dotStyle + 
-			subtleStyle.Render("ctrl+c: quit") + "\n"
+			subtleStyle.Render("tab: complete") + dotStyle + 
+			subtleStyle.Render("esc: back") + "\n"
 	
 	return header + inputLine + footer
 }
@@ -293,6 +314,141 @@ type commandCompleteMsg struct {
 	command string
 	result  executor.ExecutionResult
 	error   error
+}
+
+// updateCompleting handles updates in path completion state
+func (m CLITUIModel) updateCompleting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "tab":
+		// Cycle to next completion candidate
+		m.cycleCompletion()
+		return m, nil
+	case "enter":
+		// Apply selected completion and return to editing
+		m.applySelectedCompletion()
+		m.exitCompletionMode()
+		return m, nil
+	case "esc":
+		// Exit completion mode without applying
+		m.exitCompletionMode()
+		return m, nil
+	case "ctrl+c":
+		return m, tea.Quit
+	default:
+		// Any other key exits completion mode and handles the key in edit mode
+		m.exitCompletionMode()
+		return m.updateEditing(msg)
+	}
+}
+
+// handleTabCompletion triggers path completion
+func (m CLITUIModel) handleTabCompletion() (CLITUIModel, tea.Cmd) {
+	command := m.input.Value()
+	cursorPos := m.input.Position()
+	
+	// Extract path context
+	context, err := utils.ExtractPathContext(command, cursorPos)
+	if err != nil || context == nil {
+		// No valid path context, ignore tab
+		return m, nil
+	}
+	
+	// Get completion candidates
+	candidates, err := utils.ScanDirectoryForCompletion(context.Directory, context.Prefix)
+	if err != nil || len(candidates) == 0 {
+		// No completions available
+		return m, nil
+	}
+	
+	// Handle single candidate - auto complete
+	if len(candidates) == 1 {
+		// Apply completion directly
+		newCommand, newPos := utils.ApplyCompletion(command, candidates[0], context.StartPos, context.EndPos)
+		m.input.SetValue(newCommand)
+		m.input.SetCursor(newPos)
+		return m, nil
+	}
+	
+	// Multiple candidates - enter completion mode
+	m.completionCandidates = candidates
+	m.completionIndex = 0
+	m.completionContext = context
+	m.inCompletionMode = true
+	m.state = StateCompleting
+	
+	return m, nil
+}
+
+// cycleCompletion cycles through completion candidates
+func (m *CLITUIModel) cycleCompletion() {
+	if len(m.completionCandidates) == 0 {
+		return
+	}
+	
+	m.completionIndex = (m.completionIndex + 1) % len(m.completionCandidates)
+}
+
+// applySelectedCompletion applies the currently selected completion
+func (m *CLITUIModel) applySelectedCompletion() {
+	if len(m.completionCandidates) == 0 || m.completionContext == nil {
+		return
+	}
+	
+	selectedCompletion := m.completionCandidates[m.completionIndex]
+	command := m.input.Value()
+	
+	newCommand, newPos := utils.ApplyCompletion(
+		command,
+		selectedCompletion,
+		m.completionContext.StartPos,
+		m.completionContext.EndPos,
+	)
+	
+	m.input.SetValue(newCommand)
+	m.input.SetCursor(newPos)
+}
+
+// exitCompletionMode exits path completion mode and returns to editing
+func (m *CLITUIModel) exitCompletionMode() {
+	m.state = StateEditing
+	m.inCompletionMode = false
+	m.completionCandidates = []string{}
+	m.completionIndex = 0
+	m.completionContext = nil
+}
+
+// viewCompleting renders the path completion interface
+func (m CLITUIModel) viewCompleting() string {
+	if !m.inCompletionMode || len(m.completionCandidates) == 0 {
+		return m.viewEditing()
+	}
+	
+	// Header
+	header := "✏️  Edit command (tab to cycle, enter to select):\n\n"
+	
+	// Input line with command
+	inputLine := fmt.Sprintf("$ %s\n\n", m.input.View())
+	
+	// Completion candidates
+	candidatesHeader := "Path completions:\n"
+	var candidates strings.Builder
+	
+	for i, candidate := range m.completionCandidates {
+		checkbox := "[ ]"
+		if i == m.completionIndex {
+			checkbox = "[●]"
+		}
+		
+		displayName := utils.GetCompletionDisplayName(candidate)
+		candidates.WriteString(fmt.Sprintf("%s %s\n", checkbox, displayName))
+	}
+	
+	// Footer with help
+	footer := "\n" + subtleStyle.Render("tab: cycle") + dotStyle + 
+		subtleStyle.Render("enter: select") + dotStyle + 
+		subtleStyle.Render("esc: cancel") + "\n"
+	
+	return header + inputLine + candidatesHeader + candidates.String() + footer
 }
 
 // Styles for CLI-style interface (inspired by bubbletea example)
