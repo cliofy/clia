@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/yourusername/clia/internal/ai"
 	"github.com/yourusername/clia/internal/config"
 	"github.com/yourusername/clia/internal/executor"
@@ -22,10 +24,8 @@ type CLIService struct {
 	configManager *config.Manager
 }
 
-// runCLIMode processes a user request in CLI mode and exits
+// runCLIMode processes a user request in CLI mode using TUI and exits
 func runCLIMode(userRequest string) error {
-	fmt.Printf("🤖 Processing: %s\n\n", userRequest)
-	
 	// Initialize services
 	service, err := initializeCLIServices()
 	if err != nil {
@@ -38,31 +38,18 @@ func runCLIMode(userRequest string) error {
 		// Try fallback suggestions if AI is not available
 		if fallbackSuggestions := service.getFallbackSuggestions(userRequest); len(fallbackSuggestions) > 0 {
 			suggestions = fallbackSuggestions
-			fmt.Println("⚡ Using fallback command suggestions")
 		} else {
 			return fmt.Errorf("failed to get AI suggestions: %w", err)
 		}
 	}
 	
 	if len(suggestions) == 0 {
-		fmt.Println("❌ No command suggestions available")
+		fmt.Printf("❌ No command suggestions available for: %s\n", userRequest)
 		return nil
 	}
 	
-	// Display suggestions and get user choice
-	choice, err := displaySuggestionsAndGetChoice(suggestions)
-	if err != nil {
-		return err
-	}
-	
-	if choice == -1 {
-		fmt.Println("👋 Cancelled")
-		return nil
-	}
-	
-	// Execute the chosen command
-	selectedCmd := suggestions[choice]
-	return service.executeCommand(selectedCmd)
+	// Start CLI TUI with suggestions
+	return runCLITUI(userRequest, suggestions)
 }
 
 // initializeCLIServices initializes AI service and executor for CLI mode
@@ -373,4 +360,22 @@ func (s *CLIService) executeCommand(suggestion ai.CommandSuggestion) error {
 	}
 	
 	return nil
+}
+
+// runCLITUI starts the CLI-style interactive selection with the given suggestions
+func runCLITUI(userRequest string, suggestions []ai.CommandSuggestion) error {
+	// Create the CLI TUI model
+	model := NewCLITUIModel(userRequest, suggestions)
+	
+	// Create and run the TUI program WITHOUT alt screen (CLI-style)
+	program := tea.NewProgram(
+		model,
+		// No WithAltScreen() - this keeps it in the CLI instead of full-screen TUI
+		tea.WithInput(os.Stdin),
+		tea.WithOutput(os.Stderr),
+	)
+	
+	// Run the program
+	_, err := program.Run()
+	return err
 }
