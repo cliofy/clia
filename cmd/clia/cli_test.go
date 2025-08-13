@@ -6,6 +6,7 @@ import (
 	"testing"
 	
 	"github.com/yourusername/clia/internal/ai"
+	"github.com/yourusername/clia/pkg/memory"
 )
 
 func TestCLIServiceInitialization(t *testing.T) {
@@ -127,7 +128,11 @@ func TestCLITUIModelCreation(t *testing.T) {
 		},
 	}
 	
-	model := NewCLITUIModel(userRequest, suggestions)
+	// Create a mock service for testing
+	service := &CLIService{
+		memoryEnabled: false,
+	}
+	model := NewCLITUIModel(userRequest, suggestions, []memory.SearchResult{}, service)
 	
 	// Verify initial state
 	if model.state != StateSelecting {

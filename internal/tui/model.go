@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/yourusername/clia/internal/config"
 	"github.com/yourusername/clia/internal/executor"
 	"github.com/yourusername/clia/internal/version"
+	"github.com/yourusername/clia/pkg/memory"
 	"github.com/yourusername/clia/pkg/utils"
 )
 
@@ -93,6 +95,13 @@ type Model struct {
 	// Current provider and model info
 	currentProvider string
 	currentModel    string
+
+	// Memory management
+	memoryManager       *memory.Manager
+	memorySuggestions   []memorySuggestion
+	combinedSuggestions []interface{} // Mix of aiSuggestion and memorySuggestion
+	lastUserRequest     string         // Store for memory saving
+	memoryEnabled       bool          // Whether memory is functional
 }
 
 // New creates a new TUI model
@@ -119,6 +128,13 @@ func New() Model {
 	
 	// Initialize executor
 	cmdExecutor := executor.New()
+	
+	// Initialize memory manager
+	memoryManager, memoryErr := memory.NewManager()
+	memoryEnabled := memoryErr == nil
+	if memoryErr != nil {
+		fmt.Printf("Warning: Failed to initialize memory manager: %v\n", memoryErr)
+	}
 	
 	currentProvider := "none"
 	currentModel := "none"
@@ -194,6 +210,12 @@ func New() Model {
 		executionResult:      nil,
 		outputStream:         nil,
 		streamActive:         false,
+		// Memory state
+		memoryManager:       memoryManager,
+		memorySuggestions:   []memorySuggestion{},
+		combinedSuggestions: []interface{}{},
+		lastUserRequest:     "",
+		memoryEnabled:       memoryEnabled,
 	}
 
 	// Add welcome message
@@ -207,6 +229,17 @@ func New() Model {
 	
 	if currentProvider != "none" {
 		model.addMessage(fmt.Sprintf("✅ Provider initialized: %s (model: %s)", currentProvider, currentModel), MessageTypeSystem)
+	}
+	
+	// Show memory status
+	if memoryEnabled {
+		if memoryManager != nil {
+			stats := memoryManager.GetStats()
+			totalEntries := stats["total_entries"].(int)
+			model.addMessage(fmt.Sprintf("💭 Memory initialized: %d stored commands", totalEntries), MessageTypeSystem)
+		}
+	} else {
+		model.addMessage("⚠️  Memory disabled due to initialization error", MessageTypeError)
 	}
 	
 	model.addMessage("Type your natural language command and press Enter", MessageTypeSystem)
@@ -333,10 +366,13 @@ func (m *Model) handleCommand(cmd *Command) tea.Cmd {
 	}
 }
 
-// handleAIRequest processes regular AI requests
+// handleAIRequest processes regular AI requests with memory integration
 func (m *Model) handleAIRequest(input string) tea.Cmd {
 	// Add user message to history
 	m.addMessage(input, MessageTypeUser)
+	
+	// Store the user request for later memory saving
+	m.lastUserRequest = input
 	
 	// Clear input and set processing state
 	m.input.SetValue("")
@@ -345,40 +381,67 @@ func (m *Model) handleAIRequest(input string) tea.Cmd {
 	m.spinner = m.spinner.Reset() // Reset spinner to start fresh
 	m.thinkingDots = ""
 	m.status = "Processing..."
-	
-	// Add thinking bubble message
-	m.addMessage("🤖 思考中...", MessageTypeSystem)
 
-	// Request AI suggestions
-	// Return combined commands including animation ticker
-	return tea.Batch(
-		AIProcessingCmd(),
-		StartAnimationCmd(),
-		m.spinner.TickCmd(), // Start the spinner animation
-		tea.Cmd(func() tea.Msg {
-			// Run AI request in background
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
+	// Search memory first if enabled
+	var memoryCmd tea.Cmd
+	if m.memoryEnabled && m.memoryManager != nil {
+		memoryCmd = tea.Cmd(func() tea.Msg {
+			options := memory.DefaultSearchOptions()
+			options.MaxResults = 3 // Limit memory suggestions
 			
-			response, err := m.aiService.SuggestCommands(ctx, input)
+			results, err := m.memoryManager.Search(input, options)
 			if err != nil {
-				return aiResponseMsg{error: err}
+				// If memory search fails, just log and continue
+				log.Printf("Memory search failed: %v", err)
+				return memoryResultsMsg{query: input, results: []memory.SearchResult{}, error: err}
 			}
 			
-			// Convert AI suggestions to TUI suggestions
-			var suggestions []aiSuggestion
-			for _, cmd := range response.Suggestions {
-				suggestions = append(suggestions, aiSuggestion{
-					Command:     cmd.Command,
-					Description: cmd.Description,
-					Safe:        cmd.Safe,
-					Confidence:  cmd.Confidence,
-				})
-			}
-			
-			return aiResponseMsg{suggestions: suggestions}
-		}),
-	)
+			return memoryResultsMsg{query: input, results: results, error: nil}
+		})
+	}
+	
+	// AI request command
+	aiCmd := tea.Cmd(func() tea.Msg {
+		// Add thinking bubble message
+		return addMessageMsg{Content: "🤖 思考中...", Type: MessageTypeSystem}
+	})
+	
+	// Start AI processing in background
+	aiProcessingCmd := tea.Cmd(func() tea.Msg {
+		// Small delay to allow memory results to show first
+		time.Sleep(100 * time.Millisecond)
+		
+		// Run AI request in background
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		
+		response, err := m.aiService.SuggestCommands(ctx, input)
+		if err != nil {
+			return aiResponseMsg{error: err}
+		}
+		
+		// Convert AI suggestions to TUI suggestions
+		var suggestions []aiSuggestion
+		for _, cmd := range response.Suggestions {
+			suggestions = append(suggestions, aiSuggestion{
+				Command:     cmd.Command,
+				Description: cmd.Description,
+				Safe:        cmd.Safe,
+				Confidence:  cmd.Confidence,
+			})
+		}
+		
+		return aiResponseMsg{suggestions: suggestions}
+	})
+
+	// Return combined commands
+	var cmds []tea.Cmd
+	if memoryCmd != nil {
+		cmds = append(cmds, memoryCmd)
+	}
+	cmds = append(cmds, aiCmd, aiProcessingCmd, AIProcessingCmd(), StartAnimationCmd(), m.spinner.TickCmd())
+	
+	return tea.Batch(cmds...)
 }
 
 // handleHelpCommand shows help information
@@ -559,22 +622,42 @@ func (m *Model) handleAIResponse(msg aiResponseMsg) {
 
 // handleCommandSelection handles when user selects a command by number
 func (m *Model) handleCommandSelection(index int) tea.Cmd {
-	// Check if we're in selection mode and have valid suggestions
-	if !m.inSelectionMode || len(m.availableSuggestions) == 0 {
+	// Check if we're in selection mode
+	if !m.inSelectionMode {
 		m.addMessage("❌ No commands available to select", MessageTypeError)
 		return nil
 	}
 	
-	// Check if index is valid (0-based, so index should be < length)
+	// First check if user is selecting from memory suggestions (they use M1, M2, etc format)
+	// For simplicity, we'll handle this in the number input parsing instead
+	
+	// Handle memory suggestions first (if any)
+	if len(m.memorySuggestions) > 0 {
+		// If index is within memory range, select from memory
+		if index < len(m.memorySuggestions) {
+			return m.handleMemorySelection(memorySelectionMsg{index: index})
+		}
+		// Adjust index for AI suggestions (they come after memory suggestions)
+		index -= len(m.memorySuggestions)
+	}
+	
+	// Handle AI suggestions
+	if len(m.availableSuggestions) == 0 {
+		m.addMessage("❌ No AI commands available to select", MessageTypeError)
+		return nil
+	}
+	
+	// Check if adjusted index is valid for AI suggestions
 	if index < 0 || index >= len(m.availableSuggestions) {
-		m.addMessage(fmt.Sprintf("❌ Invalid selection. Please choose 1-%d", len(m.availableSuggestions)), MessageTypeError)
+		totalSuggestions := len(m.memorySuggestions) + len(m.availableSuggestions)
+		m.addMessage(fmt.Sprintf("❌ Invalid selection. Please choose 1-%d", totalSuggestions), MessageTypeError)
 		return nil
 	}
 	
 	// Track the last selected index
 	m.lastSelectedIndex = index
 	
-	// Get the selected suggestion
+	// Get the selected AI suggestion
 	selectedSuggestion := m.availableSuggestions[index]
 	
 	// Add confirmation message
@@ -588,6 +671,7 @@ func (m *Model) handleCommandSelection(index int) tea.Cmd {
 	// Clear selection mode
 	m.inSelectionMode = false
 	m.availableSuggestions = []aiSuggestion{}
+	m.memorySuggestions = []memorySuggestion{}
 	
 	// Return command to execute the selected command
 	return CommandExecutionCmd(
@@ -642,8 +726,26 @@ func (m *Model) handleCommandExecution(msg commandExecutionMsg) tea.Cmd {
 	confidencePercent := int(msg.confidence * 100)
 	m.addMessage(fmt.Sprintf("🎯 Confidence: %d%%", confidencePercent), MessageTypeSystem)
 	
+	// Save to memory before execution
+	var memorySaveCmd tea.Cmd
+	if m.lastUserRequest != "" && m.memoryEnabled {
+		memorySaveCmd = MemorySaveCmd(
+			m.lastUserRequest,
+			msg.command,
+			msg.description,
+			"ai", // Source
+			true, // Initial assumption - will be updated after execution
+		)
+	}
+	
 	// Execute the command
-	return m.executeCommand(msg.command, msg.description)
+	executeCmd := m.executeCommand(msg.command, msg.description)
+	
+	if memorySaveCmd != nil {
+		return tea.Batch(memorySaveCmd, executeCmd)
+	}
+	
+	return executeCmd
 }
 
 // handleConfirmationResponse handles user's response to confirmation dialog
@@ -1021,6 +1123,11 @@ func (m *Model) handleStreamEnd(msg streamEndMsg) {
 	m.outputStream = nil
 	m.executingCommand = false
 	
+	// Update memory with execution result
+	if m.currentCommand != "" {
+		m.updateMemoryWithResult(m.currentCommand, msg.exitCode == 0)
+	}
+	
 	// Display completion message
 	if msg.exitCode == 0 {
 		m.addMessage(fmt.Sprintf("✅ Command completed successfully (%.2fs)", msg.duration.Seconds()), MessageTypeSystem)
@@ -1034,4 +1141,155 @@ func (m *Model) handleStreamEnd(msg streamEndMsg) {
 	// Reset current command tracking
 	m.currentCommand = ""
 	m.currentPID = 0
+}
+
+// Memory-related handlers
+
+// handleMemoryResults processes memory search results
+func (m *Model) handleMemoryResults(msg memoryResultsMsg) {
+	if msg.error != nil {
+		log.Printf("Memory search error: %v", msg.error)
+		return
+	}
+
+	if len(msg.results) == 0 {
+		// No memory suggestions found, just wait for AI
+		return
+	}
+
+	// Convert memory results to memory suggestions
+	m.memorySuggestions = make([]memorySuggestion, 0, len(msg.results))
+	for _, result := range msg.results {
+		suggestion := memorySuggestion{
+			Entry:      result.Entry,
+			Score:      result.Score,
+			Reason:     result.Reason,
+			MatchType:  result.MatchType,
+			UsageCount: result.Entry.UsageCount,
+			LastUsed:   result.Entry.Timestamp,
+		}
+		m.memorySuggestions = append(m.memorySuggestions, suggestion)
+	}
+
+	// Display memory suggestions immediately
+	m.addMessage("💭 Memory suggestions:", MessageTypeSystem)
+	for i, suggestion := range m.memorySuggestions {
+		safetyIcon := "✓"
+		if !suggestion.Entry.Success {
+			safetyIcon = "⚠"
+		}
+		
+		// Show usage count and last used time
+		timeAgo := time.Since(suggestion.LastUsed)
+		var timeStr string
+		if timeAgo < time.Hour {
+			timeStr = fmt.Sprintf("%.0fm ago", timeAgo.Minutes())
+		} else if timeAgo < 24*time.Hour {
+			timeStr = fmt.Sprintf("%.0fh ago", timeAgo.Hours())
+		} else {
+			timeStr = fmt.Sprintf("%.0fd ago", timeAgo.Hours()/24)
+		}
+
+		suggestionText := fmt.Sprintf("M%d. %s %s (used %dx, %s)\n    %s", 
+			i+1, safetyIcon, suggestion.Entry.SelectedCommand, 
+			suggestion.UsageCount, timeStr, suggestion.Entry.Description)
+		
+		m.addMessage(suggestionText, MessageTypeAssistant)
+	}
+
+	// Update selection mode to include memory suggestions
+	m.inSelectionMode = true
+}
+
+// handleMemorySave processes memory save requests
+func (m *Model) handleMemorySave(msg memorySaveMsg) tea.Cmd {
+	if !m.memoryEnabled || m.memoryManager == nil {
+		return nil
+	}
+
+	return tea.Cmd(func() tea.Msg {
+		err := m.memoryManager.Add(
+			msg.userRequest,
+			msg.selectedCommand,
+			msg.description,
+			msg.source,
+			msg.success,
+		)
+		
+		return memorySaveResultMsg{
+			success: err == nil,
+			error:   err,
+		}
+	})
+}
+
+// handleMemorySaveResult processes memory save results
+func (m *Model) handleMemorySaveResult(msg memorySaveResultMsg) {
+	if msg.error != nil {
+		log.Printf("Failed to save to memory: %v", msg.error)
+		// Don't show error to user unless it's critical
+	}
+	// Successful saves are silent - no need to notify user
+}
+
+// handleMemorySelection processes memory suggestion selection
+func (m *Model) handleMemorySelection(msg memorySelectionMsg) tea.Cmd {
+	if msg.index < 0 || msg.index >= len(m.memorySuggestions) {
+		m.addMessage("❌ Invalid memory selection", MessageTypeError)
+		return nil
+	}
+
+	selectedMemory := m.memorySuggestions[msg.index]
+	
+	// Add confirmation message
+	m.addMessage(fmt.Sprintf("Selected from memory: %s", selectedMemory.Entry.SelectedCommand), MessageTypeUser)
+	
+	// Clear selection mode
+	m.inSelectionMode = false
+	m.memorySuggestions = []memorySuggestion{}
+	
+	// Execute the selected command
+	return CommandExecutionCmd(
+		selectedMemory.Entry.SelectedCommand,
+		selectedMemory.Entry.Description,
+		selectedMemory.Entry.Success, // Use success history as safety indicator
+		selectedMemory.Score,
+	)
+}
+
+// handleCombinedSuggestions processes combined AI and memory suggestions
+func (m *Model) handleCombinedSuggestions(msg combinedSuggestionsMsg) {
+	// This is called when we have both AI and memory suggestions
+	// For now, we display them separately, but this could be enhanced
+	// to merge and rank them together
+	
+	// AI suggestions are handled by existing handleAIResponse
+	// Memory suggestions are already displayed by handleMemoryResults
+}
+
+// Helper function to update memory after command execution
+func (m *Model) updateMemoryWithResult(command string, success bool) {
+	if !m.memoryEnabled || m.memoryManager == nil || m.lastUserRequest == "" {
+		return
+	}
+	
+	// Update the memory entry with the actual execution result
+	// This is done asynchronously to not block the UI
+	go func() {
+		// Find recent entries that match this command and update success status
+		entries := m.memoryManager.GetAll()
+		for _, entry := range entries {
+			if entry.SelectedCommand == command && 
+			   entry.UserRequest == m.lastUserRequest &&
+			   time.Since(entry.Timestamp) < 5*time.Minute { // Recent entry
+				
+				// Update the entry
+				updates := map[string]interface{}{
+					"success": success,
+				}
+				m.memoryManager.Update(entry.ID, updates)
+				break
+			}
+		}
+	}()
 }

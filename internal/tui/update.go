@@ -189,6 +189,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamEndMsg:
 		m.handleStreamEnd(msg)
+
+	// Memory-related messages
+	case memoryResultsMsg:
+		m.handleMemoryResults(msg)
+		
+	case memorySaveMsg:
+		if cmd := m.handleMemorySave(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		
+	case memorySaveResultMsg:
+		m.handleMemorySaveResult(msg)
+		
+	case memorySelectionMsg:
+		if cmd := m.handleMemorySelection(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		
+	case combinedSuggestionsMsg:
+		m.handleCombinedSuggestions(msg)
 		
 	case SpinnerTickMsg:
 		if m.showSpinner {

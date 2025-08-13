@@ -11,6 +11,7 @@ import (
 
 	"github.com/yourusername/clia/internal/ai"
 	"github.com/yourusername/clia/internal/executor"
+	"github.com/yourusername/clia/pkg/memory"
 	"github.com/yourusername/clia/pkg/utils"
 )
 
@@ -28,9 +29,11 @@ const (
 // CLITUIModel represents the CLI-specific TUI model
 type CLITUIModel struct {
 	// State management
-	state        CLITUIState
-	userRequest  string
-	suggestions  []ai.CommandSuggestion
+	state         CLITUIState
+	userRequest   string
+	suggestions   []ai.CommandSuggestion
+	memorySuggestions []memory.SearchResult
+	service       *CLIService
 	
 	// Selection state
 	selectedIndex int
@@ -51,6 +54,10 @@ type CLITUIModel struct {
 	executionOutput []string
 	commandResult *executor.ExecutionResult
 	
+	// AI processing state
+	aiProcessing  bool
+	aiProcessed   bool
+	
 	// UI state
 	width  int
 	height int
@@ -58,18 +65,20 @@ type CLITUIModel struct {
 }
 
 // NewCLITUIModel creates a new CLI TUI model
-func NewCLITUIModel(userRequest string, suggestions []ai.CommandSuggestion) CLITUIModel {
+func NewCLITUIModel(userRequest string, suggestions []ai.CommandSuggestion, memorySuggestions []memory.SearchResult, service *CLIService) CLITUIModel {
 	// Initialize text input for editing
 	input := textinput.New()
 	input.CharLimit = 500
 	input.Width = 80
 	
 	return CLITUIModel{
-		state:         StateSelecting,
-		userRequest:   userRequest,
-		suggestions:   suggestions,
-		selectedIndex: 0,
-		input:         input,
+		state:             StateSelecting,
+		userRequest:       userRequest,
+		suggestions:       suggestions,
+		memorySuggestions: memorySuggestions,
+		service:           service,
+		selectedIndex:     0,
+		input:             input,
 		// Initialize path completion state
 		completionCandidates: []string{},
 		completionIndex:      0,
@@ -83,6 +92,11 @@ func NewCLITUIModel(userRequest string, suggestions []ai.CommandSuggestion) CLIT
 
 // Init initializes the CLI TUI model
 func (m CLITUIModel) Init() tea.Cmd {
+	// Start AI processing if we have AI provider and no AI suggestions yet
+	if m.service.hasAIProvider() && len(m.suggestions) == 0 && !m.aiProcessed {
+		m.aiProcessing = true
+		return m.startAIProcessing()
+	}
 	return nil
 }
 
@@ -113,6 +127,16 @@ func (m CLITUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commandResult = &msg.result
 		m.state = StateCompleted
 		return m, nil
+		
+	case aiResponseMsg:
+		m.aiProcessing = false
+		m.aiProcessed = true
+		
+		// Add AI suggestions to existing suggestions
+		if msg.error == nil && len(msg.suggestions) > 0 {
+			m.suggestions = append(m.suggestions, msg.suggestions...)
+		}
+		return m, nil
 	}
 	
 	return m, nil
@@ -120,23 +144,42 @@ func (m CLITUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateSelecting handles updates in selection state
 func (m CLITUIModel) updateSelecting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	totalSuggestions := len(m.memorySuggestions) + len(m.suggestions)
+	
 	switch msg.String() {
 	case "up", "k":
 		if m.selectedIndex > 0 {
 			m.selectedIndex--
 		}
 	case "down", "j":
-		if m.selectedIndex < len(m.suggestions)-1 {
+		if m.selectedIndex < totalSuggestions-1 {
 			m.selectedIndex++
 		}
 	case "enter":
 		// Move to editing state with selected command
-		if len(m.suggestions) > 0 {
-			selectedSuggestion := m.suggestions[m.selectedIndex]
-			m.editingCommand = selectedSuggestion.Command
-			m.input.SetValue(selectedSuggestion.Command)
-			m.input.Focus()
-			m.state = StateEditing
+		if totalSuggestions > 0 {
+			var selectedCommand string
+			
+			// Determine if it's a memory suggestion or AI suggestion
+			if m.selectedIndex < len(m.memorySuggestions) {
+				// Memory suggestion
+				memResult := m.memorySuggestions[m.selectedIndex]
+				selectedCommand = memResult.Entry.SelectedCommand
+			} else {
+				// AI suggestion
+				aiIndex := m.selectedIndex - len(m.memorySuggestions)
+				if aiIndex < len(m.suggestions) {
+					aiSuggestion := m.suggestions[aiIndex]
+					selectedCommand = aiSuggestion.Command
+				}
+			}
+			
+			if selectedCommand != "" {
+				m.editingCommand = selectedCommand
+				m.input.SetValue(selectedCommand)
+				m.input.Focus()
+				m.state = StateEditing
+			}
 		}
 	case "esc", "ctrl+c":
 		return m, tea.Quit
@@ -227,9 +270,35 @@ func (m CLITUIModel) viewSelecting() string {
 	header := fmt.Sprintf("🤖 Processing: %s\n\nSelect a command:\n\n", m.userRequest)
 	
 	var choices strings.Builder
+	currentIndex := 0
+	
+	// Show memory suggestions first with M prefix
+	for i, memResult := range m.memorySuggestions {
+		checkbox := "[ ]"
+		if currentIndex == m.selectedIndex {
+			checkbox = "[●]"
+		}
+		
+		// Safety indicator based on previous success
+		safetyIcon := "✅"
+		if !memResult.Entry.Success {
+			safetyIcon = "⚠️"
+		}
+		
+		// Convert memory score to percentage
+		confidencePercent := int(memResult.Score * 100)
+		choice := fmt.Sprintf("%s M%d. %s %s (%d%%)\n      %s\n", 
+			checkbox, i+1, safetyIcon, memResult.Entry.SelectedCommand, confidencePercent, 
+			subtleStyle.Render(memResult.Entry.Description))
+		
+		choices.WriteString(choice)
+		currentIndex++
+	}
+	
+	// Show AI suggestions with A prefix
 	for i, suggestion := range m.suggestions {
 		checkbox := "[ ]"
-		if i == m.selectedIndex {
+		if currentIndex == m.selectedIndex {
 			checkbox = "[●]"
 		}
 		
@@ -240,14 +309,23 @@ func (m CLITUIModel) viewSelecting() string {
 		}
 		
 		confidencePercent := int(suggestion.Confidence * 100)
-		choice := fmt.Sprintf("%s %s %s (%d%%)\n    %s\n", 
-			checkbox, safetyIcon, suggestion.Command, confidencePercent, 
+		choice := fmt.Sprintf("%s A%d. %s %s (%d%%)\n      %s\n", 
+			checkbox, i+1, safetyIcon, suggestion.Command, confidencePercent, 
 			subtleStyle.Render(suggestion.Description))
 		
 		choices.WriteString(choice)
+		currentIndex++
 	}
 	
-	footer := "\n" + subtleStyle.Render("↑/↓, j/k: select") + dotStyle + 
+	// Show AI processing status
+	var statusLine string
+	if m.aiProcessing {
+		statusLine = subtleStyle.Render("🤖 AI analyzing... Please wait for more suggestions.") + "\n\n"
+	} else if !m.aiProcessed && m.service.hasAIProvider() {
+		statusLine = subtleStyle.Render("🤖 AI will provide additional suggestions shortly.") + "\n\n"
+	}
+	
+	footer := "\n" + statusLine + subtleStyle.Render("↑/↓, j/k: select") + dotStyle + 
 			subtleStyle.Render("enter: edit command") + dotStyle + 
 			subtleStyle.Render("esc: quit") + "\n"
 	
@@ -449,6 +527,34 @@ func (m CLITUIModel) viewCompleting() string {
 		subtleStyle.Render("esc: cancel") + "\n"
 	
 	return header + inputLine + candidatesHeader + candidates.String() + footer
+}
+
+// startAIProcessing starts the AI processing in background
+func (m CLITUIModel) startAIProcessing() tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		suggestions, err := m.service.getAISuggestions(m.userRequest)
+		if err != nil {
+			// If AI fails, try fallback suggestions
+			fallbackSuggestions := m.service.getFallbackSuggestions(m.userRequest)
+			return aiResponseMsg{
+				suggestions: fallbackSuggestions,
+				error:       err,
+			}
+		}
+		
+		return aiResponseMsg{
+			suggestions: suggestions,
+			error:       nil,
+		}
+	})
+}
+
+// AI response message types
+
+// aiResponseMsg represents AI response
+type aiResponseMsg struct {
+	suggestions []ai.CommandSuggestion
+	error       error
 }
 
 // Styles for CLI-style interface (inspired by bubbletea example)

@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/yourusername/clia/internal/ai"
 	"github.com/yourusername/clia/internal/executor"
+	"github.com/yourusername/clia/pkg/memory"
 )
 
 // Message represents a message in the chat history
@@ -411,6 +412,168 @@ func CommandStreamStartCmd(command, description string, stream <-chan executor.O
 			command:     command,
 			description: description,
 			stream:      stream,
+		}
+	}
+}
+
+// Memory-related messages
+
+// memorySearchMsg represents a memory search request
+type memorySearchMsg struct {
+	query string
+}
+
+// MemorySearchCmd returns a command to search memory
+func MemorySearchCmd(query string) tea.Cmd {
+	return func() tea.Msg {
+		return memorySearchMsg{
+			query: query,
+		}
+	}
+}
+
+// memoryResultsMsg represents memory search results
+type memoryResultsMsg struct {
+	query   string
+	results []memory.SearchResult
+	error   error
+}
+
+// MemoryResultsCmd returns a command with memory search results
+func MemoryResultsCmd(query string, results []memory.SearchResult, err error) tea.Cmd {
+	return func() tea.Msg {
+		return memoryResultsMsg{
+			query:   query,
+			results: results,
+			error:   err,
+		}
+	}
+}
+
+// memorySuggestion represents a memory-based command suggestion
+type memorySuggestion struct {
+	Entry       memory.MemoryEntry
+	Score       float64
+	Reason      string
+	MatchType   memory.MatchType
+	UsageCount  int
+	LastUsed    time.Time
+}
+
+// memorySelectionMsg represents selection of a memory suggestion
+type memorySelectionMsg struct {
+	index int // 0-based index of selected memory suggestion
+}
+
+// MemorySelectionCmd returns a command to select a memory suggestion
+func MemorySelectionCmd(index int) tea.Cmd {
+	return func() tea.Msg {
+		return memorySelectionMsg{
+			index: index,
+		}
+	}
+}
+
+// memorySaveMsg represents a request to save a command to memory
+type memorySaveMsg struct {
+	userRequest     string
+	selectedCommand string
+	description     string
+	source          string
+	success         bool
+}
+
+// MemorySaveCmd returns a command to save a command to memory
+func MemorySaveCmd(userRequest, selectedCommand, description, source string, success bool) tea.Cmd {
+	return func() tea.Msg {
+		return memorySaveMsg{
+			userRequest:     userRequest,
+			selectedCommand: selectedCommand,
+			description:     description,
+			source:          source,
+			success:         success,
+		}
+	}
+}
+
+// memorySaveResultMsg represents the result of saving to memory
+type memorySaveResultMsg struct {
+	success bool
+	error   error
+}
+
+// MemorySaveResultCmd returns a command with memory save result
+func MemorySaveResultCmd(success bool, err error) tea.Cmd {
+	return func() tea.Msg {
+		return memorySaveResultMsg{
+			success: success,
+			error:   err,
+		}
+	}
+}
+
+// memoryStatsMsg represents memory statistics
+type memoryStatsMsg struct {
+	stats map[string]interface{}
+	error error
+}
+
+// MemoryStatsCmd returns a command with memory statistics
+func MemoryStatsCmd(stats map[string]interface{}, err error) tea.Cmd {
+	return func() tea.Msg {
+		return memoryStatsMsg{
+			stats: stats,
+			error: err,
+		}
+	}
+}
+
+// memoryDeleteMsg represents a request to delete a memory entry
+type memoryDeleteMsg struct {
+	entryID string
+}
+
+// MemoryDeleteCmd returns a command to delete a memory entry
+func MemoryDeleteCmd(entryID string) tea.Cmd {
+	return func() tea.Msg {
+		return memoryDeleteMsg{
+			entryID: entryID,
+		}
+	}
+}
+
+// memoryDeleteResultMsg represents the result of deleting a memory entry
+type memoryDeleteResultMsg struct {
+	entryID string
+	success bool
+	error   error
+}
+
+// MemoryDeleteResultCmd returns a command with memory delete result
+func MemoryDeleteResultCmd(entryID string, success bool, err error) tea.Cmd {
+	return func() tea.Msg {
+		return memoryDeleteResultMsg{
+			entryID: entryID,
+			success: success,
+			error:   err,
+		}
+	}
+}
+
+// combinedSuggestionsMsg represents combined AI and memory suggestions
+type combinedSuggestionsMsg struct {
+	aiSuggestions     []aiSuggestion
+	memorySuggestions []memorySuggestion
+	userRequest       string
+}
+
+// CombinedSuggestionsCmd returns a command with combined suggestions
+func CombinedSuggestionsCmd(userRequest string, aiSuggestions []aiSuggestion, memorySuggestions []memorySuggestion) tea.Cmd {
+	return func() tea.Msg {
+		return combinedSuggestionsMsg{
+			userRequest:       userRequest,
+			aiSuggestions:     aiSuggestions,
+			memorySuggestions: memorySuggestions,
 		}
 	}
 }

@@ -14,17 +14,20 @@ import (
 	"github.com/yourusername/clia/internal/ai"
 	"github.com/yourusername/clia/internal/config"
 	"github.com/yourusername/clia/internal/executor"
+	"github.com/yourusername/clia/pkg/memory"
 	"github.com/yourusername/clia/pkg/utils"
 )
 
 // CLIService holds the services needed for CLI mode
 type CLIService struct {
-	aiService    *ai.Service
-	executor     *executor.Executor
+	aiService     *ai.Service
+	executor      *executor.Executor
 	configManager *config.Manager
+	memoryManager *memory.Manager
+	memoryEnabled bool
 }
 
-// runCLIMode processes a user request in CLI mode using TUI and exits
+// runCLIMode processes a user request in CLI mode with memory integration
 func runCLIMode(userRequest string) error {
 	// Initialize services
 	service, err := initializeCLIServices()
@@ -32,24 +35,63 @@ func runCLIMode(userRequest string) error {
 		return fmt.Errorf("failed to initialize services: %w", err)
 	}
 	
-	// Get AI suggestions (with fallback)
-	suggestions, err := service.getAISuggestions(userRequest)
-	if err != nil {
-		// Try fallback suggestions if AI is not available
-		if fallbackSuggestions := service.getFallbackSuggestions(userRequest); len(fallbackSuggestions) > 0 {
-			suggestions = fallbackSuggestions
+	// Search memory first if enabled
+	var memorySuggestions []memory.SearchResult
+	if service.memoryEnabled && service.memoryManager != nil {
+		options := memory.DefaultSearchOptions()
+		options.MaxResults = 3
+		
+		memResults, err := service.memoryManager.Search(userRequest, options)
+		if err != nil {
+			fmt.Printf("⚠️  Memory search failed: %v\n", err)
 		} else {
-			return fmt.Errorf("failed to get AI suggestions: %w", err)
+			memorySuggestions = memResults
 		}
 	}
 	
-	if len(suggestions) == 0 {
-		fmt.Printf("❌ No command suggestions available for: %s\n", userRequest)
-		return nil
+	// Display memory suggestions immediately if any
+	if len(memorySuggestions) > 0 {
+		fmt.Printf("💭 Memory suggestions:\n")
+		for i, result := range memorySuggestions {
+			safetyIcon := "✓"
+			if !result.Entry.Success {
+				safetyIcon = "⚠"
+			}
+			
+			timeAgo := time.Since(result.Entry.Timestamp)
+			var timeStr string
+			if timeAgo < time.Hour {
+				timeStr = fmt.Sprintf("%.0fm ago", timeAgo.Minutes())
+			} else if timeAgo < 24*time.Hour {
+				timeStr = fmt.Sprintf("%.0fh ago", timeAgo.Hours())
+			} else {
+				timeStr = fmt.Sprintf("%.0fd ago", timeAgo.Hours()/24)
+			}
+			
+			fmt.Printf("  M%d. %s %s (used %dx, %s)\n      %s\n", 
+				i+1, safetyIcon, result.Entry.SelectedCommand, 
+				result.Entry.UsageCount, timeStr, result.Entry.Description)
+		}
+		fmt.Println()
 	}
 	
-	// Start CLI TUI with suggestions
-	return runCLITUI(userRequest, suggestions)
+	// If we have no memory suggestions and AI is not available, show fallback
+	if len(memorySuggestions) == 0 && !service.hasAIProvider() {
+		if fallbackSuggestions := service.getFallbackSuggestions(userRequest); len(fallbackSuggestions) > 0 {
+			// Use fallback suggestions immediately
+			return runCLITUI(userRequest, fallbackSuggestions, memorySuggestions, service)
+		} else {
+			fmt.Printf("❌ No command suggestions available for: %s\n", userRequest)
+			fmt.Printf("💡 To enable AI suggestions, set an API key:\n")
+			fmt.Printf("   export OPENROUTER_API_KEY=\"your-key-here\"\n")
+			fmt.Printf("   export OPENAI_API_KEY=\"your-key-here\"\n")
+			return nil
+		}
+	}
+	
+	// Start CLI TUI immediately with memory suggestions
+	// AI suggestions will be loaded asynchronously within the TUI
+	return runCLITUI(userRequest, []ai.CommandSuggestion{}, memorySuggestions, service)
 }
 
 // initializeCLIServices initializes AI service and executor for CLI mode
@@ -66,6 +108,13 @@ func initializeCLIServices() (*CLIService, error) {
 	
 	// Initialize executor
 	cmdExecutor := executor.New()
+	
+	// Initialize memory manager
+	memoryManager, memoryErr := memory.NewManager()
+	memoryEnabled := memoryErr == nil
+	if memoryErr != nil {
+		fmt.Printf("Warning: Failed to initialize memory manager: %v\n", memoryErr)
+	}
 	
 	// Try to configure providers based on available API keys
 	var initErrors []string
@@ -104,6 +153,8 @@ func initializeCLIServices() (*CLIService, error) {
 		aiService:     aiService,
 		executor:      cmdExecutor,
 		configManager: configManager,
+		memoryManager: memoryManager,
+		memoryEnabled: memoryEnabled,
 	}, nil
 }
 
@@ -255,6 +306,21 @@ func (s *CLIService) getFallbackSuggestions(userRequest string) []ai.CommandSugg
 	return suggestions
 }
 
+// hasAIProvider checks if AI provider is available and configured
+func (s *CLIService) hasAIProvider() bool {
+	if s.aiService == nil {
+		return false
+	}
+	
+	// Check if we have any API keys configured
+	hasOpenRouter := os.Getenv("OPENROUTER_API_KEY") != ""
+	hasOpenAI := os.Getenv("OPENAI_API_KEY") != ""
+	hasAnthropic := os.Getenv("ANTHROPIC_API_KEY") != ""
+	hasOllama := os.Getenv("OLLAMA_HOST") != "" || os.Getenv("OLLAMA_API_BASE") != ""
+	
+	return hasOpenRouter || hasOpenAI || hasAnthropic || hasOllama
+}
+
 // displaySuggestionsAndGetChoice shows suggestions and gets user choice
 func displaySuggestionsAndGetChoice(suggestions []ai.CommandSuggestion) (int, error) {
 	fmt.Println("🤖 AI Suggestions (sorted by confidence):")
@@ -363,9 +429,9 @@ func (s *CLIService) executeCommand(suggestion ai.CommandSuggestion) error {
 }
 
 // runCLITUI starts the CLI-style interactive selection with the given suggestions
-func runCLITUI(userRequest string, suggestions []ai.CommandSuggestion) error {
-	// Create the CLI TUI model
-	model := NewCLITUIModel(userRequest, suggestions)
+func runCLITUI(userRequest string, suggestions []ai.CommandSuggestion, memorySuggestions []memory.SearchResult, service *CLIService) error {
+	// Create the CLI TUI model with memory support
+	model := NewCLITUIModel(userRequest, suggestions, memorySuggestions, service)
 	
 	// Create and run the TUI program WITHOUT alt screen (CLI-style)
 	program := tea.NewProgram(
