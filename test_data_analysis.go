@@ -65,7 +65,7 @@ Diana Lee,35,Marketing,71000`
 	fmt.Println("   cat test_employees.csv | ./bin/clia summarize")
 	fmt.Println()
 
-	// JSON analysis examples  
+	// JSON analysis examples
 	fmt.Println("🔧 JSON Data Analysis:")
 	fmt.Println("   cat test_data.json | ./bin/clia analyze")
 	fmt.Println("   cat test_data.json | ./bin/clia format yaml")
@@ -105,7 +105,7 @@ Diana Lee,35,Marketing,71000`
 	// Show current status
 	fmt.Println("📋 Current Implementation Status:")
 	fmt.Println("   ✅ Pipe input detection")
-	fmt.Println("   ✅ Analysis command parsing") 
+	fmt.Println("   ✅ Analysis command parsing")
 	fmt.Println("   ✅ Data format detection")
 	fmt.Println("   ✅ AI analysis service")
 	fmt.Println("   ✅ Markdown rendering")

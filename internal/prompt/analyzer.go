@@ -7,16 +7,16 @@ import (
 
 // AnalysisPromptTemplate provides specialized prompts for data analysis
 type AnalysisPromptTemplate struct {
-	InputData   string
-	DataFormat  string
+	InputData    string
+	DataFormat   string
 	OutputFormat string
 }
 
 // NewAnalysisPromptTemplate creates a new analysis prompt template
 func NewAnalysisPromptTemplate(inputData, dataFormat, outputFormat string) *AnalysisPromptTemplate {
 	return &AnalysisPromptTemplate{
-		InputData:   inputData,
-		DataFormat:  dataFormat,
+		InputData:    inputData,
+		DataFormat:   dataFormat,
 		OutputFormat: outputFormat,
 	}
 }
@@ -142,8 +142,8 @@ func (apt *AnalysisPromptTemplate) BuildFormatPrompt() string {
 
 Convert the data to %s format:`
 
-	return fmt.Sprintf(template, apt.DataFormat, apt.OutputFormat, apt.OutputFormat, 
-		apt.OutputFormat, apt.DataFormat, apt.OutputFormat, apt.InputData, 
+	return fmt.Sprintf(template, apt.DataFormat, apt.OutputFormat, apt.OutputFormat,
+		apt.OutputFormat, apt.DataFormat, apt.OutputFormat, apt.InputData,
 		apt.OutputFormat, apt.OutputFormat)
 }
 
@@ -195,7 +195,7 @@ func GetDataFormatDescription(format string) string {
 		"text": "Plain text or unstructured data",
 		"xml":  "Extensible Markup Language with tags",
 	}
-	
+
 	if desc, exists := descriptions[format]; exists {
 		return desc
 	}
@@ -207,15 +207,15 @@ func ValidatePrompt(prompt string) error {
 	if strings.TrimSpace(prompt) == "" {
 		return fmt.Errorf("prompt cannot be empty")
 	}
-	
+
 	if len(prompt) < 50 {
 		return fmt.Errorf("prompt too short, may not provide enough context")
 	}
-	
+
 	if len(prompt) > 8000 {
 		return fmt.Errorf("prompt too long, may exceed model limits")
 	}
-	
+
 	return nil
 }
 
@@ -226,11 +226,11 @@ func OptimizePromptForModel(prompt, modelName string) string {
 		// Add instruction for concise output
 		prompt += "\n\nNote: Please keep your response concise and focused on the most important information."
 	}
-	
+
 	// For code-focused models, emphasize structured output
 	if strings.Contains(strings.ToLower(modelName), "code") {
 		prompt += "\n\nPlease structure your response with clear sections and markdown formatting."
 	}
-	
+
 	return prompt
 }

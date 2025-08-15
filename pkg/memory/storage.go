@@ -22,7 +22,7 @@ type Storage struct {
 func NewStorage(filePath string) *Storage {
 	dir := filepath.Dir(filePath)
 	backupDir := filepath.Join(dir, "backups")
-	
+
 	return &Storage{
 		filePath:   filePath,
 		backupDir:  backupDir,
@@ -94,7 +94,7 @@ func (s *Storage) Save(memory *Memory) error {
 	header := fmt.Sprintf("# clia memory file\n# Generated on %s\n# Total entries: %d\n\n",
 		time.Now().Format(time.RFC3339),
 		len(memory.Entries))
-	
+
 	content := header + string(data)
 
 	// Write to temporary file first

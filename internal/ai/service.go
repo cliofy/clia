@@ -41,7 +41,7 @@ func (s *Service) SetProviderByConfig(providerType ProviderType, config *Provide
 	if err != nil {
 		return fmt.Errorf("failed to create provider: %w", err)
 	}
-	
+
 	s.provider = provider
 	return nil
 }
@@ -63,15 +63,15 @@ func (s *Service) SuggestCommands(ctx context.Context, userInput string) (*Compl
 	if s.provider == nil {
 		return nil, fmt.Errorf("no LLM provider configured")
 	}
-	
+
 	if !s.provider.IsConfigured() {
 		return nil, fmt.Errorf("LLM provider is not properly configured")
 	}
-	
+
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, s.requestTimeout)
 	defer cancel()
-	
+
 	// Build prompt
 	promptText, err := s.promptBuilder.BuildCommandPrompt(ctx, userInput)
 	if err != nil {
@@ -81,17 +81,17 @@ func (s *Service) SuggestCommands(ctx context.Context, userInput string) (*Compl
 			return nil, fmt.Errorf("failed to build prompt: %w", err)
 		}
 	}
-	
+
 	// Validate prompt
 	if err := s.promptBuilder.ValidatePrompt(promptText); err != nil {
 		return nil, fmt.Errorf("invalid prompt: %w", err)
 	}
-	
+
 	// Create completion request
 	req := &CompletionRequest{
 		Prompt: promptText,
 	}
-	
+
 	// Get suggestions from LLM
 	response, err := s.provider.Complete(ctx, req)
 	if err != nil {
@@ -101,18 +101,18 @@ func (s *Service) SuggestCommands(ctx context.Context, userInput string) (*Compl
 		}
 		return nil, fmt.Errorf("LLM completion failed: %w", err)
 	}
-	
+
 	// Process and validate suggestions
 	if response.Suggestions == nil {
 		response.Suggestions = []CommandSuggestion{}
 	}
-	
+
 	// Filter and sort suggestions
 	suggestions := CommandSuggestions(response.Suggestions)
-	
+
 	// Sort by confidence and limit results
 	suggestions = suggestions.SortByConfidence().Top(3)
-	
+
 	response.Suggestions = suggestions
 	return response, nil
 }
@@ -122,12 +122,12 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	if s.provider == nil {
 		return fmt.Errorf("no LLM provider configured")
 	}
-	
+
 	// For OpenAI provider, we can test connection
 	if openaiProvider, ok := s.provider.(*OpenAIProvider); ok {
 		return openaiProvider.TestConnection(ctx)
 	}
-	
+
 	// For other providers, do a simple validation
 	return s.provider.ValidateConfig()
 }
@@ -135,7 +135,7 @@ func (s *Service) TestConnection(ctx context.Context) error {
 // GetProviderInfo returns information about the current provider
 func (s *Service) GetProviderInfo() map[string]interface{} {
 	info := make(map[string]interface{})
-	
+
 	if s.provider != nil {
 		info["name"] = s.provider.GetName()
 		info["model"] = s.provider.GetModel()
@@ -144,22 +144,22 @@ func (s *Service) GetProviderInfo() map[string]interface{} {
 		info["name"] = "none"
 		info["configured"] = false
 	}
-	
+
 	info["fallback_mode"] = s.fallbackMode
 	info["timeout"] = s.requestTimeout.String()
-	
+
 	return info
 }
 
 // handleFallback provides fallback suggestions when LLM fails
 func (s *Service) handleFallback(userInput string, originalErr error) (*CompletionResponse, error) {
 	log.Printf("LLM failed, using fallback mode: %v", originalErr)
-	
+
 	// Generate simple rule-based suggestions
 	suggestions := s.generateFallbackSuggestions(userInput)
-	
+
 	return &CompletionResponse{
-		Content: fmt.Sprintf("LLM unavailable, generated %d fallback suggestions", len(suggestions)),
+		Content:     fmt.Sprintf("LLM unavailable, generated %d fallback suggestions", len(suggestions)),
 		Suggestions: suggestions,
 		Provider:    "fallback",
 		Model:       "rule-based",
@@ -170,7 +170,7 @@ func (s *Service) handleFallback(userInput string, originalErr error) (*Completi
 func (s *Service) generateFallbackSuggestions(userInput string) []CommandSuggestion {
 	input := strings.ToLower(strings.TrimSpace(userInput))
 	var suggestions []CommandSuggestion
-	
+
 	// Simple pattern matching for common commands
 	patterns := map[string]CommandSuggestion{
 		"list":      {Command: "ls -la", Description: "List files with details", Confidence: 0.7, Safe: true, Category: "file_management"},
@@ -184,14 +184,14 @@ func (s *Service) generateFallbackSuggestions(userInput string) []CommandSuggest
 		"git":       {Command: "git status", Description: "Show git status", Confidence: 0.8, Safe: true, Category: "development"},
 		"process":   {Command: "ps aux", Description: "Show running processes", Confidence: 0.7, Safe: true, Category: "system_info"},
 	}
-	
+
 	// Find matching patterns
 	for pattern, suggestion := range patterns {
 		if strings.Contains(input, pattern) {
 			suggestions = append(suggestions, suggestion)
 		}
 	}
-	
+
 	// If no patterns match, provide generic suggestions
 	if len(suggestions) == 0 {
 		suggestions = []CommandSuggestion{
@@ -204,7 +204,7 @@ func (s *Service) generateFallbackSuggestions(userInput string) []CommandSuggest
 			},
 		}
 	}
-	
+
 	return suggestions
 }
 
@@ -224,12 +224,12 @@ func (s *Service) GetAvailableModels(ctx context.Context) ([]ModelInfo, error) {
 	if s.provider == nil {
 		return nil, fmt.Errorf("no provider configured")
 	}
-	
+
 	// Check if provider supports model listing
 	if modelProvider, ok := s.provider.(ModelListProvider); ok {
 		return modelProvider.GetModels(ctx)
 	}
-	
+
 	// For providers that don't support model listing, return default models
 	return s.getDefaultModels(), nil
 }
@@ -240,7 +240,7 @@ func (s *Service) SwitchProvider(providerType ProviderType, config *ProviderConf
 	if err != nil {
 		return fmt.Errorf("failed to create provider %s: %w", providerType, err)
 	}
-	
+
 	s.provider = provider
 	return nil
 }
@@ -250,12 +250,12 @@ func (s *Service) SwitchModel(modelName string) error {
 	if s.provider == nil {
 		return fmt.Errorf("no provider configured")
 	}
-	
+
 	// Check if provider supports model switching
 	if modelSwitcher, ok := s.provider.(ModelSwitcher); ok {
 		return modelSwitcher.SwitchModel(modelName)
 	}
-	
+
 	// For providers that don't support dynamic model switching,
 	// we would need to recreate the provider with new config
 	return fmt.Errorf("current provider does not support dynamic model switching")
@@ -265,25 +265,25 @@ func (s *Service) SwitchModel(modelName string) error {
 func (s *Service) GetProviderStatus() map[ProviderType]ProviderStatusInfo {
 	status := make(map[ProviderType]ProviderStatusInfo)
 	supportedProviders := s.factory.GetSupportedProviders()
-	
+
 	for _, providerType := range supportedProviders {
 		// Create a test config to check if provider can be configured
 		defaultConfig := DefaultProviderConfig(providerType)
 		provider, err := s.factory.Create(providerType, defaultConfig)
-		
+
 		statusInfo := ProviderStatusInfo{
 			Type:      providerType,
 			Available: err == nil,
 			Current:   s.provider != nil && s.provider.GetName() == string(providerType),
 		}
-		
+
 		if provider != nil {
 			statusInfo.Configured = provider.IsConfigured()
 		}
-		
+
 		status[providerType] = statusInfo
 	}
-	
+
 	return status
 }
 
@@ -292,7 +292,7 @@ func (s *Service) GetCurrentProviderType() ProviderType {
 	if s.provider == nil {
 		return ""
 	}
-	
+
 	return ProviderType(s.provider.GetName())
 }
 
@@ -300,20 +300,20 @@ func (s *Service) GetCurrentProviderType() ProviderType {
 func (s *Service) ValidateAPIKey(providerType ProviderType, apiKey string) error {
 	config := DefaultProviderConfig(providerType)
 	config.APIKey = apiKey
-	
+
 	provider, err := s.factory.Create(providerType, config)
 	if err != nil {
 		return fmt.Errorf("failed to create provider: %w", err)
 	}
-	
+
 	// Test connection with the API key
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	if testProvider, ok := provider.(ConnectionTester); ok {
 		return testProvider.TestConnection(ctx)
 	}
-	
+
 	// Basic validation
 	return provider.ValidateConfig()
 }
@@ -323,12 +323,12 @@ func (s *Service) getDefaultModels() []ModelInfo {
 	if s.provider == nil {
 		return []ModelInfo{}
 	}
-	
+
 	providerName := s.provider.GetName()
 	currentModel := s.provider.GetModel()
-	
+
 	var models []ModelInfo
-	
+
 	switch providerName {
 	case "openai":
 		models = []ModelInfo{
@@ -353,13 +353,13 @@ func (s *Service) getDefaultModels() []ModelInfo {
 			{ID: currentModel, Name: currentModel, Description: "Current model", Current: true},
 		}
 	}
-	
+
 	// Mark current model
 	for i := range models {
 		if models[i].ID == currentModel {
 			models[i].Current = true
 		}
 	}
-	
+
 	return models
 }

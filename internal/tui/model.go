@@ -33,45 +33,45 @@ type Model struct {
 	// UI Components
 	input    textinput.Model
 	viewport viewport.Model
-	
+
 	// Application state
 	messages []Message
 	ready    bool
 	width    int
 	height   int
-	
+
 	// Status information
 	status string
-	
+
 	// AI service
-	aiService    *ai.Service
-	processing   bool
-	suggestions  []aiSuggestion
-	
+	aiService   *ai.Service
+	processing  bool
+	suggestions []aiSuggestion
+
 	// Command executor
 	executor *executor.Executor
-	
+
 	// Animation state
 	spinner         Spinner
 	animationTicker int
 	showSpinner     bool
 	pulseFrame      int
 	thinkingDots    string
-	
+
 	// Command state
-	commandMode     bool
-	waitingAPIKey   bool
-	apiKeyProvider  string
-	
+	commandMode    bool
+	waitingAPIKey  bool
+	apiKeyProvider string
+
 	// Selection state
-	inSelectionMode bool
+	inSelectionMode      bool
 	availableSuggestions []aiSuggestion
 	lastSelectedIndex    int
-	
+
 	// Confirmation dialog state
 	inConfirmationMode bool
 	pendingCommand     commandExecutionMsg
-	
+
 	// Edit mode state
 	inEditMode         bool
 	editingCommand     string
@@ -79,7 +79,7 @@ type Model struct {
 	editingSafe        bool
 	editingConfidence  float64
 	originalCommand    string
-	
+
 	// Command execution state
 	executingCommand bool
 	currentCommand   string
@@ -88,10 +88,10 @@ type Model struct {
 	executionResult  *executionResult
 	outputStream     <-chan executor.OutputLine
 	streamActive     bool
-	
+
 	// Configuration
 	configManager *config.Manager
-	
+
 	// Current provider and model info
 	currentProvider string
 	currentModel    string
@@ -100,7 +100,7 @@ type Model struct {
 	memoryManager       *memory.Manager
 	memorySuggestions   []memorySuggestion
 	combinedSuggestions []interface{} // Mix of aiSuggestion and memorySuggestion
-	lastUserRequest     string         // Store for memory saving
+	lastUserRequest     string        // Store for memory saving
 	memoryEnabled       bool          // Whether memory is functional
 }
 
@@ -122,31 +122,31 @@ func New() Model {
 	if err != nil {
 		fmt.Printf("Warning: Failed to initialize config manager: %v\n", err)
 	}
-	
+
 	// Initialize AI service
 	aiService := ai.NewService().SetFallbackMode(true)
-	
+
 	// Initialize executor
 	cmdExecutor := executor.New()
-	
+
 	// Initialize memory manager
 	memoryManager, memoryErr := memory.NewManager()
 	memoryEnabled := memoryErr == nil
 	if memoryErr != nil {
 		fmt.Printf("Warning: Failed to initialize memory manager: %v\n", memoryErr)
 	}
-	
+
 	currentProvider := "none"
 	currentModel := "none"
-	
+
 	var initErrors []string
-	
+
 	// Try to configure providers based on available API keys
 	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
 		config := ai.DefaultProviderConfig(ai.ProviderTypeOpenRouter)
 		config.APIKey = apiKey
 		config.Model = "z-ai/glm-4.5-air:free" // Use user's preferred model
-		
+
 		if err := aiService.SetProviderByConfig(ai.ProviderTypeOpenRouter, config); err == nil {
 			currentProvider = "openrouter"
 			currentModel = config.Model
@@ -156,7 +156,7 @@ func New() Model {
 	} else if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		config := ai.DefaultProviderConfig(ai.ProviderTypeOpenAI)
 		config.APIKey = apiKey
-		
+
 		if err := aiService.SetProviderByConfig(ai.ProviderTypeOpenAI, config); err == nil {
 			currentProvider = "openai"
 			currentModel = config.Model
@@ -166,7 +166,7 @@ func New() Model {
 	} else {
 		initErrors = append(initErrors, "No API keys found. Set OPENROUTER_API_KEY or OPENAI_API_KEY in environment.")
 	}
-	
+
 	// Create initial model
 	model := Model{
 		input:           ti,
@@ -193,8 +193,8 @@ func New() Model {
 		availableSuggestions: []aiSuggestion{},
 		lastSelectedIndex:    -1,
 		// Confirmation state
-		inConfirmationMode:   false,
-		pendingCommand:       commandExecutionMsg{},
+		inConfirmationMode: false,
+		pendingCommand:     commandExecutionMsg{},
 		// Edit mode state
 		inEditMode:         false,
 		editingCommand:     "",
@@ -203,13 +203,13 @@ func New() Model {
 		editingConfidence:  0.0,
 		originalCommand:    "",
 		// Execution state
-		executingCommand:     false,
-		currentCommand:       "",
-		currentPID:           0,
-		executionOutput:      []string{},
-		executionResult:      nil,
-		outputStream:         nil,
-		streamActive:         false,
+		executingCommand: false,
+		currentCommand:   "",
+		currentPID:       0,
+		executionOutput:  []string{},
+		executionResult:  nil,
+		outputStream:     nil,
+		streamActive:     false,
 		// Memory state
 		memoryManager:       memoryManager,
 		memorySuggestions:   []memorySuggestion{},
@@ -221,16 +221,16 @@ func New() Model {
 	// Add welcome message
 	model.addMessage("Welcome to clia - Command Line Intelligent Assistant", MessageTypeSystem)
 	model.addMessage(fmt.Sprintf("Version %s (%s)", version.Version, version.GoVersion), MessageTypeSystem)
-	
+
 	// Show initialization errors if any
 	for _, err := range initErrors {
 		model.addMessage("⚠️  "+err, MessageTypeError)
 	}
-	
+
 	if currentProvider != "none" {
 		model.addMessage(fmt.Sprintf("✅ Provider initialized: %s (model: %s)", currentProvider, currentModel), MessageTypeSystem)
 	}
-	
+
 	// Show memory status
 	if memoryEnabled {
 		if memoryManager != nil {
@@ -241,7 +241,7 @@ func New() Model {
 	} else {
 		model.addMessage("⚠️  Memory disabled due to initialization error", MessageTypeError)
 	}
-	
+
 	model.addMessage("Type your natural language command and press Enter", MessageTypeSystem)
 	model.addMessage("Commands: /provider, /model, /status, /help", MessageTypeSystem)
 	model.addMessage("Shortcuts: Ctrl+C (quit), Ctrl+L (clear history)", MessageTypeSystem)
@@ -299,16 +299,16 @@ func (m *Model) handleWindowSizeMsg(msg tea.WindowSizeMsg) {
 	m.ready = true
 
 	// Calculate dimensions for components
-	headerHeight := 3  // Status bar + borders
-	footerHeight := 3  // Input area + borders  
+	headerHeight := 3 // Status bar + borders
+	footerHeight := 3 // Input area + borders
 	contentHeight := msg.Height - headerHeight - footerHeight
 
 	// Update viewport size
-	m.viewport.Width = msg.Width - 4  // Account for padding
+	m.viewport.Width = msg.Width - 4 // Account for padding
 	m.viewport.Height = contentHeight
-	
+
 	// Update input width
-	m.input.Width = msg.Width - 8  // Account for borders and padding
+	m.input.Width = msg.Width - 8 // Account for borders and padding
 
 	// Refresh content
 	m.updateViewportContent()
@@ -370,10 +370,10 @@ func (m *Model) handleCommand(cmd *Command) tea.Cmd {
 func (m *Model) handleAIRequest(input string) tea.Cmd {
 	// Add user message to history
 	m.addMessage(input, MessageTypeUser)
-	
+
 	// Store the user request for later memory saving
 	m.lastUserRequest = input
-	
+
 	// Clear input and set processing state
 	m.input.SetValue("")
 	m.processing = true
@@ -388,38 +388,38 @@ func (m *Model) handleAIRequest(input string) tea.Cmd {
 		memoryCmd = tea.Cmd(func() tea.Msg {
 			options := memory.DefaultSearchOptions()
 			options.MaxResults = 3 // Limit memory suggestions
-			
+
 			results, err := m.memoryManager.Search(input, options)
 			if err != nil {
 				// If memory search fails, just log and continue
 				log.Printf("Memory search failed: %v", err)
 				return memoryResultsMsg{query: input, results: []memory.SearchResult{}, error: err}
 			}
-			
+
 			return memoryResultsMsg{query: input, results: results, error: nil}
 		})
 	}
-	
+
 	// AI request command
 	aiCmd := tea.Cmd(func() tea.Msg {
 		// Add thinking bubble message
 		return addMessageMsg{Content: "🤖 思考中...", Type: MessageTypeSystem}
 	})
-	
+
 	// Start AI processing in background
 	aiProcessingCmd := tea.Cmd(func() tea.Msg {
 		// Small delay to allow memory results to show first
 		time.Sleep(100 * time.Millisecond)
-		
+
 		// Run AI request in background
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		
+
 		response, err := m.aiService.SuggestCommands(ctx, input)
 		if err != nil {
 			return aiResponseMsg{error: err}
 		}
-		
+
 		// Convert AI suggestions to TUI suggestions
 		var suggestions []aiSuggestion
 		for _, cmd := range response.Suggestions {
@@ -430,7 +430,7 @@ func (m *Model) handleAIRequest(input string) tea.Cmd {
 				Confidence:  cmd.Confidence,
 			})
 		}
-		
+
 		return aiResponseMsg{suggestions: suggestions}
 	})
 
@@ -440,7 +440,7 @@ func (m *Model) handleAIRequest(input string) tea.Cmd {
 		cmds = append(cmds, memoryCmd)
 	}
 	cmds = append(cmds, aiCmd, aiProcessingCmd, AIProcessingCmd(), StartAnimationCmd(), m.spinner.TickCmd())
-	
+
 	return tea.Batch(cmds...)
 }
 
@@ -465,7 +465,7 @@ func (m *Model) handleProviderCommand(args []string) tea.Cmd {
 		// List providers
 		return tea.Cmd(func() tea.Msg {
 			status := m.aiService.GetProviderStatus()
-			
+
 			// Convert to ProviderStatus map for display
 			providerStatus := make(map[string]ProviderStatus)
 			for providerType, statusInfo := range status {
@@ -476,26 +476,26 @@ func (m *Model) handleProviderCommand(args []string) tea.Cmd {
 					Available:  statusInfo.Available,
 				}
 			}
-			
+
 			formatted := FormatProviderList(providerStatus, m.currentProvider)
 			return addMessageMsg{Content: formatted, Type: MessageTypeSystem}
 		})
 	}
-	
+
 	// Switch provider
 	providerName := args[0]
 	return tea.Cmd(func() tea.Msg {
 		// Check if API key is available
 		providerType := ai.ProviderType(providerName)
 		config := ai.DefaultProviderConfig(providerType)
-		
+
 		// Try to get API key from environment
 		if m.configManager != nil {
 			if apiKey := m.configManager.GetAPIKeyFromEnv(); apiKey != "" {
 				config.APIKey = apiKey
 			}
 		}
-		
+
 		if config.APIKey == "" {
 			// Need API key
 			return apiKeyInputMsg{
@@ -503,7 +503,7 @@ func (m *Model) handleProviderCommand(args []string) tea.Cmd {
 				prompt:       fmt.Sprintf("🔑 %s API key not found. Please enter your API key:", providerName),
 			}
 		}
-		
+
 		// Try to switch provider
 		err := m.aiService.SwitchProvider(providerType, config)
 		if err != nil {
@@ -513,7 +513,7 @@ func (m *Model) handleProviderCommand(args []string) tea.Cmd {
 				error:        err,
 			}
 		}
-		
+
 		return providerSwitchMsg{
 			providerType: providerName,
 			success:      true,
@@ -528,12 +528,12 @@ func (m *Model) handleModelCommand(args []string) tea.Cmd {
 		return tea.Cmd(func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			
+
 			models, err := m.aiService.GetAvailableModels(ctx)
 			return modelListMsg{models: models, error: err}
 		})
 	}
-	
+
 	// Switch model
 	modelName := args[0]
 	return tea.Cmd(func() tea.Msg {
@@ -550,12 +550,12 @@ func (m *Model) handleModelCommand(args []string) tea.Cmd {
 func (m *Model) handleAPIKeyInput(input string) tea.Cmd {
 	apiKey := input
 	providerType := m.apiKeyProvider
-	
+
 	m.input.SetValue("")
 	m.waitingAPIKey = false
 	m.input.EchoMode = textinput.EchoNormal
 	m.input.Placeholder = "Type your command request here..."
-	
+
 	return tea.Cmd(func() tea.Msg {
 		return apiKeySubmitMsg{
 			providerType: providerType,
@@ -568,15 +568,15 @@ func (m *Model) handleAPIKeyInput(input string) tea.Cmd {
 func (m *Model) handleAIResponse(msg aiResponseMsg) {
 	m.processing = false
 	m.showSpinner = false // Stop the spinner
-	
+
 	// Remove thinking bubble message
 	m.removeLastMessage()
-	
+
 	if msg.error != nil {
 		// Handle AI error with more context
 		errorMsg := fmt.Sprintf("❌ AI Request Failed: %s", msg.error.Error())
 		m.addMessage(errorMsg, MessageTypeError)
-		
+
 		// Provide helpful suggestions based on error type
 		if strings.Contains(msg.error.Error(), "not configured") || strings.Contains(msg.error.Error(), "API key") {
 			m.addMessage("💡 Try: /provider openrouter (to configure provider with API key)", MessageTypeSystem)
@@ -585,36 +585,36 @@ func (m *Model) handleAIResponse(msg aiResponseMsg) {
 		} else if strings.Contains(msg.error.Error(), "rate limit") {
 			m.addMessage("💡 Rate limit exceeded - please wait a moment and try again", MessageTypeSystem)
 		}
-		
+
 		m.status = fmt.Sprintf("Error - %s • %s", m.currentProvider, m.currentModel)
 		return
 	}
-	
+
 	if len(msg.suggestions) == 0 {
 		m.addMessage("No command suggestions available", MessageTypeSystem)
 		m.status = fmt.Sprintf("Ready - %s • %s", m.currentProvider, m.currentModel)
 		return
 	}
-	
+
 	// Store suggestions for potential selection
 	m.suggestions = msg.suggestions
 	m.availableSuggestions = msg.suggestions
 	m.inSelectionMode = true // Enable selection mode
-	
+
 	// Display suggestions
 	for i, suggestion := range msg.suggestions {
 		safetyIndicator := "✓"
 		if !suggestion.Safe {
 			safetyIndicator = "⚠"
 		}
-		
+
 		confidencePercent := int(suggestion.Confidence * 100)
-		suggestionText := fmt.Sprintf("%d. %s %s (%d%% confidence)\n   %s", 
+		suggestionText := fmt.Sprintf("%d. %s %s (%d%% confidence)\n   %s",
 			i+1, safetyIndicator, suggestion.Command, confidencePercent, suggestion.Description)
-		
+
 		m.addMessage(suggestionText, MessageTypeAssistant)
 	}
-	
+
 	// Add instruction message
 	m.addMessage("💡 Use 1-9 to select a command, 'e' to edit first command, or type a new request", MessageTypeSystem)
 	m.status = fmt.Sprintf("Ready - %s • %s", m.currentProvider, m.currentModel)
@@ -627,10 +627,10 @@ func (m *Model) handleCommandSelection(index int) tea.Cmd {
 		m.addMessage("❌ No commands available to select", MessageTypeError)
 		return nil
 	}
-	
+
 	// First check if user is selecting from memory suggestions (they use M1, M2, etc format)
 	// For simplicity, we'll handle this in the number input parsing instead
-	
+
 	// Handle memory suggestions first (if any)
 	if len(m.memorySuggestions) > 0 {
 		// If index is within memory range, select from memory
@@ -640,39 +640,39 @@ func (m *Model) handleCommandSelection(index int) tea.Cmd {
 		// Adjust index for AI suggestions (they come after memory suggestions)
 		index -= len(m.memorySuggestions)
 	}
-	
+
 	// Handle AI suggestions
 	if len(m.availableSuggestions) == 0 {
 		m.addMessage("❌ No AI commands available to select", MessageTypeError)
 		return nil
 	}
-	
+
 	// Check if adjusted index is valid for AI suggestions
 	if index < 0 || index >= len(m.availableSuggestions) {
 		totalSuggestions := len(m.memorySuggestions) + len(m.availableSuggestions)
 		m.addMessage(fmt.Sprintf("❌ Invalid selection. Please choose 1-%d", totalSuggestions), MessageTypeError)
 		return nil
 	}
-	
+
 	// Track the last selected index
 	m.lastSelectedIndex = index
-	
+
 	// Get the selected AI suggestion
 	selectedSuggestion := m.availableSuggestions[index]
-	
+
 	// Add confirmation message
 	safetyIcon := "✓"
 	if !selectedSuggestion.Safe {
 		safetyIcon = "⚠️"
 	}
-	
+
 	m.addMessage(fmt.Sprintf("Selected: %s %s", safetyIcon, selectedSuggestion.Command), MessageTypeUser)
-	
+
 	// Clear selection mode
 	m.inSelectionMode = false
 	m.availableSuggestions = []aiSuggestion{}
 	m.memorySuggestions = []memorySuggestion{}
-	
+
 	// Return command to execute the selected command
 	return CommandExecutionCmd(
 		selectedSuggestion.Command,
@@ -686,7 +686,7 @@ func (m *Model) handleCommandSelection(index int) tea.Cmd {
 func (m *Model) handleCommandExecution(msg commandExecutionMsg) tea.Cmd {
 	// Perform detailed safety analysis using utils package
 	isDangerous := utils.IsDangerousCommand(msg.command)
-	
+
 	// If command is dangerous or AI marked it as unsafe, request confirmation
 	if isDangerous || !msg.safe {
 		var reason string
@@ -695,37 +695,37 @@ func (m *Model) handleCommandExecution(msg commandExecutionMsg) tea.Cmd {
 		} else {
 			reason = "AI confidence indicates this command may be risky"
 		}
-		
+
 		// Store the pending command and enter confirmation mode
 		m.pendingCommand = msg
 		m.inConfirmationMode = true
-		
+
 		// Display confirmation dialog
 		m.addMessage(fmt.Sprintf("⚠️  SAFETY WARNING: %s", reason), MessageTypeError)
 		m.addMessage(fmt.Sprintf("🔍 Command: %s", msg.command), MessageTypeSystem)
-		
+
 		if msg.description != "" {
 			m.addMessage(fmt.Sprintf("📝 Description: %s", msg.description), MessageTypeSystem)
 		}
-		
+
 		confidencePercent := int(msg.confidence * 100)
 		m.addMessage(fmt.Sprintf("🎯 AI Confidence: %d%%", confidencePercent), MessageTypeSystem)
-		
+
 		m.addMessage("❓ Do you want to proceed?", MessageTypeSystem)
 		m.addMessage("💡 Press 'y' to confirm, 'n' to cancel", MessageTypeSystem)
 		return nil
 	}
-	
+
 	// Command is safe, proceed with execution
 	m.addMessage(fmt.Sprintf("✅ Executing safe command: %s", msg.command), MessageTypeSystem)
-	
+
 	if msg.description != "" {
 		m.addMessage(fmt.Sprintf("📝 %s", msg.description), MessageTypeSystem)
 	}
-	
+
 	confidencePercent := int(msg.confidence * 100)
 	m.addMessage(fmt.Sprintf("🎯 Confidence: %d%%", confidencePercent), MessageTypeSystem)
-	
+
 	// Save to memory before execution
 	var memorySaveCmd tea.Cmd
 	if m.lastUserRequest != "" && m.memoryEnabled {
@@ -737,14 +737,14 @@ func (m *Model) handleCommandExecution(msg commandExecutionMsg) tea.Cmd {
 			true, // Initial assumption - will be updated after execution
 		)
 	}
-	
+
 	// Execute the command
 	executeCmd := m.executeCommand(msg.command, msg.description)
-	
+
 	if memorySaveCmd != nil {
 		return tea.Batch(memorySaveCmd, executeCmd)
 	}
-	
+
 	return executeCmd
 }
 
@@ -754,35 +754,35 @@ func (m *Model) handleConfirmationResponse(confirmed bool) tea.Cmd {
 		m.addMessage("❌ No confirmation dialog active", MessageTypeError)
 		return nil
 	}
-	
+
 	// Exit confirmation mode
 	m.inConfirmationMode = false
-	
+
 	if confirmed {
 		m.addMessage("✅ Command confirmed by user", MessageTypeSystem)
-		
+
 		// Execute the confirmed command (bypass safety check)
 		cmd := m.pendingCommand
 		m.addMessage(fmt.Sprintf("🚀 Executing confirmed command: %s", cmd.command), MessageTypeSystem)
-		
+
 		if cmd.description != "" {
 			m.addMessage(fmt.Sprintf("📝 %s", cmd.description), MessageTypeSystem)
 		}
-		
+
 		confidencePercent := int(cmd.confidence * 100)
 		m.addMessage(fmt.Sprintf("🎯 Confidence: %d%%", confidencePercent), MessageTypeSystem)
-		
+
 		// Execute the command - return the command for execution
 		return m.executeCommand(cmd.command, cmd.description)
-		
+
 	} else {
 		m.addMessage("❌ Command execution cancelled by user", MessageTypeSystem)
 		m.addMessage("💡 You can type a new request or select a different command", MessageTypeSystem)
 	}
-	
+
 	// Clear pending command
 	m.pendingCommand = commandExecutionMsg{}
-	
+
 	return nil
 }
 
@@ -792,11 +792,11 @@ func (m *Model) handleConfirmationRequest(msg confirmationRequestMsg) {
 	// For now, it's mainly a placeholder for completeness
 	m.addMessage(fmt.Sprintf("⚠️  Confirmation requested: %s", msg.reason), MessageTypeError)
 	m.addMessage(fmt.Sprintf("🔍 Command: %s", msg.command), MessageTypeSystem)
-	
+
 	if msg.description != "" {
 		m.addMessage(fmt.Sprintf("📝 Description: %s", msg.description), MessageTypeSystem)
 	}
-	
+
 	m.addMessage("❓ Do you want to proceed?", MessageTypeSystem)
 	m.addMessage("💡 Press 'y' to confirm, 'n' to cancel", MessageTypeSystem)
 }
@@ -820,14 +820,22 @@ func (m *Model) executeCommand(command, description string) tea.Cmd {
 		m.addMessage("⚠️  Another command is already running. Please wait for it to complete.", MessageTypeError)
 		return nil
 	}
-	
-	// Update execution state
+
+	// Check if this is an interactive program that needs PTY
+	ptyExecutor := executor.NewPTYExecutor()
+	if ptyExecutor.IsTUIProgram(command) {
+		m.addMessage(fmt.Sprintf("🎮 Running interactive program: %s", command), MessageTypeSystem)
+		m.addMessage("💡 The program will run in full terminal mode. Press any key when finished.", MessageTypeSystem)
+		return PTYExecutionRequestCmd(command, description)
+	}
+
+	// Update execution state for regular commands
 	m.executingCommand = true
 	m.currentCommand = command
 	m.executionOutput = []string{}
 	m.executionResult = nil
-	
-	// Start streaming command execution
+
+	// Start streaming command execution for regular commands
 	return m.startStreamingExecution(command, description)
 }
 
@@ -835,17 +843,17 @@ func (m *Model) executeCommand(command, description string) tea.Cmd {
 func (m *Model) startStreamingExecution(command, description string) tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		ctx := context.Background()
-		
+
 		// Start the command stream
 		outputChan, err := m.executor.Stream(ctx, command)
 		if err != nil {
 			return CommandErrorCmd(command, err)()
 		}
-		
+
 		// Store the stream channel in model (we'll access it in update loop)
 		// Note: This is a hack for the current implementation - in a real app
 		// we'd handle this differently
-		
+
 		return commandStreamStartMsg{
 			command:     command,
 			description: description,
@@ -860,23 +868,23 @@ func (m *Model) handleCommandStart(msg commandStartMsg) {
 	m.currentPID = msg.pid
 }
 
-// handleCommandOutput handles command output message  
+// handleCommandOutput handles command output message
 func (m *Model) handleCommandOutput(msg commandOutputMsg) {
 	// Add output to buffer
 	m.executionOutput = append(m.executionOutput, msg.content)
-	
+
 	// Display output in TUI
 	outputType := MessageTypeAssistant
 	if msg.isStderr {
 		outputType = MessageTypeError
 	}
-	
+
 	// Add timestamp prefix for output
 	prefix := "📤"
 	if msg.isStderr {
 		prefix = "❌"
 	}
-	
+
 	if strings.TrimSpace(msg.content) != "" {
 		m.addMessage(fmt.Sprintf("%s %s", prefix, msg.content), outputType)
 	}
@@ -892,7 +900,7 @@ func (m *Model) handleCommandComplete(msg commandCompleteMsg) {
 		Duration: msg.duration,
 		Error:    msg.error,
 	}
-	
+
 	// Display stdout output if available
 	if msg.stdout != "" {
 		lines := strings.Split(strings.TrimSpace(msg.stdout), "\n")
@@ -902,7 +910,7 @@ func (m *Model) handleCommandComplete(msg commandCompleteMsg) {
 			}
 		}
 	}
-	
+
 	// Display stderr output if available
 	if msg.stderr != "" {
 		lines := strings.Split(strings.TrimSpace(msg.stderr), "\n")
@@ -912,7 +920,7 @@ func (m *Model) handleCommandComplete(msg commandCompleteMsg) {
 			}
 		}
 	}
-	
+
 	// Display completion message
 	if msg.exitCode == 0 {
 		m.addMessage(fmt.Sprintf("✅ Command completed successfully (%.2fs)", msg.duration.Seconds()), MessageTypeSystem)
@@ -922,7 +930,7 @@ func (m *Model) handleCommandComplete(msg commandCompleteMsg) {
 			m.addMessage(fmt.Sprintf("Error: %s", msg.error.Error()), MessageTypeError)
 		}
 	}
-	
+
 	// Reset current command tracking
 	m.currentCommand = ""
 	m.currentPID = 0
@@ -936,9 +944,9 @@ func (m *Model) handleCommandError(msg commandErrorMsg) {
 		Command: msg.command,
 		Error:   msg.error,
 	}
-	
+
 	m.addMessage(fmt.Sprintf("❌ Execution error: %s", msg.error.Error()), MessageTypeError)
-	
+
 	// Reset current command tracking
 	m.currentCommand = ""
 	m.currentPID = 0
@@ -953,20 +961,20 @@ func (m *Model) enterEditMode(suggestion aiSuggestion) {
 	m.editingSafe = suggestion.Safe
 	m.editingConfidence = suggestion.Confidence
 	m.originalCommand = suggestion.Command
-	
+
 	// Clear available suggestions since we're now editing
 	m.availableSuggestions = []aiSuggestion{}
-	
+
 	// Update input to show the command being edited
 	m.input.SetValue(suggestion.Command)
 	m.input.Focus()
-	
+
 	// Show edit mode instructions
 	safetyIcon := "✓"
 	if !suggestion.Safe {
 		safetyIcon = "⚠️"
 	}
-	
+
 	m.addMessage(fmt.Sprintf("📝 Edit Mode: %s %s", safetyIcon, suggestion.Command), MessageTypeSystem)
 	m.addMessage(fmt.Sprintf("📋 Original: %s", suggestion.Description), MessageTypeSystem)
 	m.addMessage("💡 Edit the command above, then press Enter to execute or Escape to cancel", MessageTypeSystem)
@@ -977,9 +985,9 @@ func (m *Model) exitEditMode(save bool) tea.Cmd {
 	if !m.inEditMode {
 		return nil
 	}
-	
+
 	var cmd tea.Cmd
-	
+
 	if save {
 		// Save the edited command and execute it
 		editedCommand := m.input.Value()
@@ -988,7 +996,7 @@ func (m *Model) exitEditMode(save bool) tea.Cmd {
 		} else {
 			m.addMessage(fmt.Sprintf("✅ Command unchanged: %s", editedCommand), MessageTypeSystem)
 		}
-		
+
 		// Create execution message with edited command
 		cmd = CommandExecutionCmd(
 			editedCommand,
@@ -1001,7 +1009,7 @@ func (m *Model) exitEditMode(save bool) tea.Cmd {
 		m.addMessage("❌ Edit cancelled", MessageTypeSystem)
 		m.addMessage("💡 You can type a new request or select a different command", MessageTypeSystem)
 	}
-	
+
 	// Reset edit mode state
 	m.inEditMode = false
 	m.editingCommand = ""
@@ -1009,11 +1017,11 @@ func (m *Model) exitEditMode(save bool) tea.Cmd {
 	m.editingSafe = true
 	m.editingConfidence = 0.0
 	m.originalCommand = ""
-	
+
 	// Clear input and reset placeholder
 	m.input.SetValue("")
 	m.input.Placeholder = "Type your command request here..."
-	
+
 	return cmd
 }
 
@@ -1022,7 +1030,7 @@ func (m *Model) handleEditModeInput() tea.Cmd {
 	if !m.inEditMode {
 		return nil
 	}
-	
+
 	// In edit mode, Enter saves and executes the command
 	return m.exitEditMode(true)
 }
@@ -1035,21 +1043,21 @@ func (m *Model) handleDirectCommand(input string) tea.Cmd {
 		m.input.SetValue("")
 		return nil
 	}
-	
+
 	command := strings.TrimSpace(input[1:])
 	if command == "" {
 		m.addMessage("❌ Empty direct command. Usage: !<command>", MessageTypeError)
 		m.input.SetValue("")
 		return nil
 	}
-	
+
 	// Add user input to history
 	m.addMessage(input, MessageTypeUser)
 	m.input.SetValue("")
-	
+
 	// Show direct execution message (no safety checks warning)
 	m.addMessage(fmt.Sprintf("⚡ Direct execution (no safety checks): %s", command), MessageTypeSystem)
-	
+
 	// Execute command directly without any safety checks or confirmations
 	return m.executeCommand(command, "Direct command execution")
 }
@@ -1058,12 +1066,12 @@ func (m *Model) handleDirectCommand(input string) tea.Cmd {
 func (m *Model) handleCommandStreamStart(msg commandStreamStartMsg) tea.Cmd {
 	m.outputStream = msg.stream
 	m.streamActive = true
-	
+
 	m.addMessage(fmt.Sprintf("🚀 Streaming: %s", msg.command), MessageTypeSystem)
 	if msg.description != "" {
 		m.addMessage(fmt.Sprintf("📝 %s", msg.description), MessageTypeSystem)
 	}
-	
+
 	// Start stream tick processing
 	return StreamTickCmd()
 }
@@ -1073,7 +1081,7 @@ func (m *Model) handleStreamTick() tea.Cmd {
 	if !m.streamActive || m.outputStream == nil {
 		return nil
 	}
-	
+
 	// Non-blocking read from stream
 	select {
 	case output, ok := <-m.outputStream:
@@ -1082,20 +1090,20 @@ func (m *Model) handleStreamTick() tea.Cmd {
 			m.streamActive = false
 			m.outputStream = nil
 			m.executingCommand = false
-			
+
 			// Reset command tracking
 			command := m.currentCommand
 			m.currentCommand = ""
 			m.currentPID = 0
-			
+
 			// Add completion message
 			if command != "" {
 				m.addMessage(fmt.Sprintf("✅ Command completed: %s", command), MessageTypeSystem)
 			}
-			
+
 			return nil
 		}
-		
+
 		// Process the output line
 		if strings.TrimSpace(output.Content) != "" {
 			outputType := MessageTypeAssistant
@@ -1104,13 +1112,13 @@ func (m *Model) handleStreamTick() tea.Cmd {
 				outputType = MessageTypeError
 				prefix = "❌"
 			}
-			
+
 			m.addMessage(fmt.Sprintf("%s %s", prefix, output.Content), outputType)
 		}
-		
+
 		// Continue ticking
 		return StreamTickCmd()
-		
+
 	default:
 		// No data available, continue ticking
 		return StreamTickCmd()
@@ -1122,12 +1130,12 @@ func (m *Model) handleStreamEnd(msg streamEndMsg) {
 	m.streamActive = false
 	m.outputStream = nil
 	m.executingCommand = false
-	
+
 	// Update memory with execution result
 	if m.currentCommand != "" {
 		m.updateMemoryWithResult(m.currentCommand, msg.exitCode == 0)
 	}
-	
+
 	// Display completion message
 	if msg.exitCode == 0 {
 		m.addMessage(fmt.Sprintf("✅ Command completed successfully (%.2fs)", msg.duration.Seconds()), MessageTypeSystem)
@@ -1137,7 +1145,7 @@ func (m *Model) handleStreamEnd(msg streamEndMsg) {
 			m.addMessage(fmt.Sprintf("Error: %s", msg.error.Error()), MessageTypeError)
 		}
 	}
-	
+
 	// Reset current command tracking
 	m.currentCommand = ""
 	m.currentPID = 0
@@ -1178,7 +1186,7 @@ func (m *Model) handleMemoryResults(msg memoryResultsMsg) {
 		if !suggestion.Entry.Success {
 			safetyIcon = "⚠"
 		}
-		
+
 		// Show usage count and last used time
 		timeAgo := time.Since(suggestion.LastUsed)
 		var timeStr string
@@ -1190,10 +1198,10 @@ func (m *Model) handleMemoryResults(msg memoryResultsMsg) {
 			timeStr = fmt.Sprintf("%.0fd ago", timeAgo.Hours()/24)
 		}
 
-		suggestionText := fmt.Sprintf("M%d. %s %s (used %dx, %s)\n    %s", 
-			i+1, safetyIcon, suggestion.Entry.SelectedCommand, 
+		suggestionText := fmt.Sprintf("M%d. %s %s (used %dx, %s)\n    %s",
+			i+1, safetyIcon, suggestion.Entry.SelectedCommand,
 			suggestion.UsageCount, timeStr, suggestion.Entry.Description)
-		
+
 		m.addMessage(suggestionText, MessageTypeAssistant)
 	}
 
@@ -1215,7 +1223,7 @@ func (m *Model) handleMemorySave(msg memorySaveMsg) tea.Cmd {
 			msg.source,
 			msg.success,
 		)
-		
+
 		return memorySaveResultMsg{
 			success: err == nil,
 			error:   err,
@@ -1240,14 +1248,14 @@ func (m *Model) handleMemorySelection(msg memorySelectionMsg) tea.Cmd {
 	}
 
 	selectedMemory := m.memorySuggestions[msg.index]
-	
+
 	// Add confirmation message
 	m.addMessage(fmt.Sprintf("Selected from memory: %s", selectedMemory.Entry.SelectedCommand), MessageTypeUser)
-	
+
 	// Clear selection mode
 	m.inSelectionMode = false
 	m.memorySuggestions = []memorySuggestion{}
-	
+
 	// Execute the selected command
 	return CommandExecutionCmd(
 		selectedMemory.Entry.SelectedCommand,
@@ -1262,7 +1270,7 @@ func (m *Model) handleCombinedSuggestions(msg combinedSuggestionsMsg) {
 	// This is called when we have both AI and memory suggestions
 	// For now, we display them separately, but this could be enhanced
 	// to merge and rank them together
-	
+
 	// AI suggestions are handled by existing handleAIResponse
 	// Memory suggestions are already displayed by handleMemoryResults
 }
@@ -1272,17 +1280,17 @@ func (m *Model) updateMemoryWithResult(command string, success bool) {
 	if !m.memoryEnabled || m.memoryManager == nil || m.lastUserRequest == "" {
 		return
 	}
-	
+
 	// Update the memory entry with the actual execution result
 	// This is done asynchronously to not block the UI
 	go func() {
 		// Find recent entries that match this command and update success status
 		entries := m.memoryManager.GetAll()
 		for _, entry := range entries {
-			if entry.SelectedCommand == command && 
-			   entry.UserRequest == m.lastUserRequest &&
-			   time.Since(entry.Timestamp) < 5*time.Minute { // Recent entry
-				
+			if entry.SelectedCommand == command &&
+				entry.UserRequest == m.lastUserRequest &&
+				time.Since(entry.Timestamp) < 5*time.Minute { // Recent entry
+
 				// Update the entry
 				updates := map[string]interface{}{
 					"success": success,
@@ -1292,4 +1300,50 @@ func (m *Model) updateMemoryWithResult(command string, success bool) {
 			}
 		}
 	}()
+}
+
+// PTY execution handlers
+
+// handlePTYExecutionRequest handles a request to execute a command with PTY
+func (m *Model) handlePTYExecutionRequest(msg ptyExecutionRequestMsg) tea.Cmd {
+	// Create PTY executor and execute the command
+	return tea.Cmd(func() tea.Msg {
+		ptyExecutor := executor.NewPTYExecutor()
+
+		ctx := context.Background()
+		result, err := ptyExecutor.ExecuteInteractive(ctx, msg.command)
+
+		return PTYExecutionCompleteCmd(
+			msg.command,
+			result.ExitCode,
+			result.Duration,
+			err,
+		)()
+	})
+}
+
+// handlePTYExecutionComplete handles completion of PTY execution
+func (m *Model) handlePTYExecutionComplete(msg ptyExecutionCompleteMsg) {
+	// Display execution result
+	if msg.error != nil {
+		m.addMessage(fmt.Sprintf("❌ Interactive program failed: %s", msg.error.Error()), MessageTypeError)
+	} else {
+		if msg.exitCode == 0 {
+			m.addMessage(fmt.Sprintf("✅ Interactive program completed successfully (%.2fs)", msg.duration.Seconds()), MessageTypeSystem)
+		} else {
+			m.addMessage(fmt.Sprintf("⚠️  Interactive program exited with code %d (%.2fs)", msg.exitCode, msg.duration.Seconds()), MessageTypeError)
+		}
+	}
+
+	// Save to memory if we have memory enabled
+	if m.memoryEnabled && m.memoryManager != nil && m.lastUserRequest != "" && msg.error == nil {
+		success := msg.exitCode == 0
+		source := "pty"
+		description := fmt.Sprintf("Interactive program executed with PTY")
+
+		err := m.memoryManager.Add(m.lastUserRequest, msg.command, description, source, success)
+		if err != nil {
+			m.addMessage(fmt.Sprintf("⚠️  Failed to save to memory: %v", err), MessageTypeError)
+		}
+	}
 }

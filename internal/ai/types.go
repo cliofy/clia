@@ -108,11 +108,11 @@ func (cs CommandSuggestions) SortByConfidence() CommandSuggestions {
 	if len(cs) <= 1 {
 		return cs
 	}
-	
+
 	// Simple bubble sort by confidence
 	sorted := make(CommandSuggestions, len(cs))
 	copy(sorted, cs)
-	
+
 	for i := 0; i < len(sorted)-1; i++ {
 		for j := 0; j < len(sorted)-i-1; j++ {
 			if sorted[j].Confidence < sorted[j+1].Confidence {
@@ -120,7 +120,7 @@ func (cs CommandSuggestions) SortByConfidence() CommandSuggestions {
 			}
 		}
 	}
-	
+
 	return sorted
 }
 
@@ -134,12 +134,12 @@ func (cs CommandSuggestions) Top(n int) CommandSuggestions {
 
 // ModelInfo represents information about an AI model
 type ModelInfo struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Pricing     string  `json:"pricing"`
-	ContextSize int     `json:"context_length"`
-	Current     bool    `json:"current"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Pricing     string `json:"pricing"`
+	ContextSize int    `json:"context_length"`
+	Current     bool   `json:"current"`
 }
 
 // ProviderStatusInfo represents the status of a provider

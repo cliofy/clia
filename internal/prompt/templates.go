@@ -62,23 +62,23 @@ func NewCommandPromptTemplate(userInput string, ctx *Context) *CommandPromptTemp
 // Build builds the complete prompt
 func (t *CommandPromptTemplate) Build() string {
 	var parts []string
-	
+
 	// Add system prompt
 	parts = append(parts, t.SystemPrompt)
-	
+
 	// Add context information
 	if t.Context != nil {
 		parts = append(parts, "\nCURRENT ENVIRONMENT:")
 		parts = append(parts, t.Context.FormatForPrompt())
 	}
-	
+
 	// Add user request
 	parts = append(parts, "\nUSER REQUEST:")
 	parts = append(parts, t.UserInput)
-	
+
 	// Add final instruction
 	parts = append(parts, "\nRespond with JSON only:")
-	
+
 	return strings.Join(parts, "\n")
 }
 
@@ -87,12 +87,12 @@ func (t *CommandPromptTemplate) EnhanceWithExamples() *CommandPromptTemplate {
 	if t.Context == nil {
 		return t
 	}
-	
+
 	examples := t.generateContextualExamples()
 	if examples != "" {
 		t.SystemPrompt = t.SystemPrompt + "\n\nEXAMPLES:\n" + examples
 	}
-	
+
 	return t
 }
 
@@ -101,45 +101,45 @@ func (t *CommandPromptTemplate) generateContextualExamples() string {
 	if t.Context == nil {
 		return ""
 	}
-	
+
 	var examples []string
-	
+
 	// File management examples
 	if t.Context.FileCount > 0 {
 		examples = append(examples, `User: "list all files with details"
 Response: {"commands":[{"cmd":"ls -la","description":"List all files and directories with detailed information","confidence":0.95,"safe":true,"category":"file_management"}]}`)
 	}
-	
+
 	// Python-specific examples
 	if t.Context.HasFiles("py") {
 		examples = append(examples, `User: "run the python script"
 Response: {"commands":[{"cmd":"python script.py","description":"Execute the Python script found in current directory","confidence":0.9,"safe":true,"category":"development"}]}`)
 	}
-	
+
 	// Git examples if in a git repository
 	if t.Context.HasFiles("git") {
 		examples = append(examples, `User: "show git status"
 Response: {"commands":[{"cmd":"git status","description":"Show the current status of the Git repository","confidence":0.98,"safe":true,"category":"development"}]}`)
 	}
-	
+
 	// Archive examples
 	if t.Context.HasFiles("tar") || t.Context.HasFiles("zip") {
 		examples = append(examples, `User: "extract the archive"
 Response: {"commands":[{"cmd":"tar -xzf archive.tar.gz","description":"Extract gzipped tar archive","confidence":0.85,"safe":true,"category":"archive"}]}`)
 	}
-	
+
 	// Limit examples to avoid making prompt too long
 	if len(examples) > 3 {
 		examples = examples[:3]
 	}
-	
+
 	return strings.Join(examples, "\n\n")
 }
 
 // CustomPromptTemplate allows for custom prompt templates
 type CustomPromptTemplate struct {
-	Template string
-	Context  *Context
+	Template  string
+	Context   *Context
 	UserInput string
 	Variables map[string]string
 }
@@ -163,22 +163,22 @@ func (t *CustomPromptTemplate) SetVariable(key, value string) *CustomPromptTempl
 // Build builds the custom prompt with variable substitution
 func (t *CustomPromptTemplate) Build() string {
 	result := t.Template
-	
+
 	// Replace standard variables
 	result = strings.ReplaceAll(result, "{user_input}", t.UserInput)
-	
+
 	if t.Context != nil {
 		result = strings.ReplaceAll(result, "{os}", t.Context.OS)
 		result = strings.ReplaceAll(result, "{shell}", t.Context.Shell)
 		result = strings.ReplaceAll(result, "{working_dir}", t.Context.WorkingDir)
 		result = strings.ReplaceAll(result, "{context}", t.Context.FormatForPrompt())
 	}
-	
+
 	// Replace custom variables
 	for key, value := range t.Variables {
 		result = strings.ReplaceAll(result, "{"+key+"}", value)
 	}
-	
+
 	return result
 }
 
@@ -190,6 +190,6 @@ Operating System: %s
 Shell: %s
 
 Respond with JSON format:
-{"commands":[{"cmd":"command here","description":"what it does","confidence":0.9,"safe":true,"category":"category"}]}`, 
+{"commands":[{"cmd":"command here","description":"what it does","confidence":0.9,"safe":true,"category":"category"}]}`,
 		userInput, os, shell)
 }

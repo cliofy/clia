@@ -75,7 +75,7 @@ func (s Spinner) View() string {
 	if len(frames) == 0 {
 		return ""
 	}
-	
+
 	currentFrame := frames[s.Frame%len(frames)]
 	return s.Style.Render(currentFrame)
 }

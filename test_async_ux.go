@@ -59,7 +59,7 @@ func main() {
 
 	stats := manager.GetStats()
 	fmt.Printf("\n✅ Memory populated with %d entries\n", stats["total_entries"])
-	
+
 	fmt.Println("\n🚀 Testing async UX improvements:")
 	fmt.Println("1. Run: ./bin/clia \"list current directory files\"")
 	fmt.Println("   Expected: Memory suggestions show immediately, AI processing in background")

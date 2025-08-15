@@ -170,14 +170,14 @@ func (m *Manager) Remove(id string) error {
 		if entry.ID == id {
 			// Remove entry
 			m.memory.Entries = append(m.memory.Entries[:i], m.memory.Entries[i+1:]...)
-			
+
 			// Auto-save
 			go func() {
 				if err := m.Save(); err != nil {
 					log.Printf("Warning: Failed to save memory after removal: %v", err)
 				}
 			}()
-			
+
 			return nil
 		}
 	}
@@ -259,12 +259,12 @@ func (m *Manager) GetStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_entries":  len(m.memory.Entries),
-		"total_usage":    totalUsage,
-		"success_count":  successCount,
-		"success_rate":   successRate,
-		"last_updated":   m.memory.Metadata.LastUpdated,
-		"memory_file":    m.memoryFile,
+		"total_entries": len(m.memory.Entries),
+		"total_usage":   totalUsage,
+		"success_count": successCount,
+		"success_rate":  successRate,
+		"last_updated":  m.memory.Metadata.LastUpdated,
+		"memory_file":   m.memoryFile,
 	}
 }
 
@@ -371,7 +371,7 @@ func (m *Manager) normalizeRequest(request string) string {
 func (m *Manager) findSimilarEntry(normalizedRequest, command string) *MemoryEntry {
 	for i := range m.memory.Entries {
 		entry := &m.memory.Entries[i]
-		
+
 		// Check for exact normalized request match or command match
 		if entry.NormalizedRequest == normalizedRequest ||
 			entry.SelectedCommand == command {

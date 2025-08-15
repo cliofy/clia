@@ -42,9 +42,9 @@ type UIConfig struct {
 
 // BehaviorConfig contains application behavior settings
 type BehaviorConfig struct {
-	AutoExecuteSafeCommands   bool `yaml:"auto_execute_safe_commands" mapstructure:"auto_execute_safe_commands"`
-	ConfirmDangerousCommands  bool `yaml:"confirm_dangerous_commands" mapstructure:"confirm_dangerous_commands"`
-	CollectUsageStats         bool `yaml:"collect_usage_stats" mapstructure:"collect_usage_stats"`
+	AutoExecuteSafeCommands  bool `yaml:"auto_execute_safe_commands" mapstructure:"auto_execute_safe_commands"`
+	ConfirmDangerousCommands bool `yaml:"confirm_dangerous_commands" mapstructure:"confirm_dangerous_commands"`
+	CollectUsageStats        bool `yaml:"collect_usage_stats" mapstructure:"collect_usage_stats"`
 }
 
 // ContextConfig contains context collection settings

@@ -56,8 +56,7 @@ var (
 			Padding(0, 1)
 
 	focusedInputStyle = inputStyle.BorderForeground(lipgloss.Color("69"))
-	
-	
+
 	// Pulsing colors for animation
 	pulseColor1 = lipgloss.Color("69")  // Blue
 	pulseColor2 = lipgloss.Color("117") // Light blue
@@ -88,7 +87,7 @@ func GetMessageStyle(msgType MessageType) lipgloss.Style {
 // FormatMessage formats a message with the appropriate style and prefix
 func FormatMessage(msg Message) string {
 	style := GetMessageStyle(msg.Type)
-	
+
 	var prefix string
 	switch msg.Type {
 	case MessageTypeUser:
@@ -102,6 +101,6 @@ func FormatMessage(msg Message) string {
 	default:
 		prefix = "• "
 	}
-	
+
 	return style.Render(prefix + msg.Content)
 }

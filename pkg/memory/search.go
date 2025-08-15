@@ -112,7 +112,7 @@ func (s *Search) calculateRelevance(query string, queryKeywords []string, entry 
 // checkExactMatch checks for exact string matches
 func (s *Search) checkExactMatch(query string, entry MemoryEntry) (float64, string) {
 	normalizedRequest := strings.ToLower(entry.NormalizedRequest)
-	
+
 	if normalizedRequest == query {
 		return 1.0, "Exact request match"
 	}
@@ -132,7 +132,7 @@ func (s *Search) checkExactMatch(query string, entry MemoryEntry) (float64, stri
 func (s *Search) checkFuzzyMatch(query string, entry MemoryEntry) (float64, string) {
 	// Calculate edit distance similarity
 	requestSimilarity := s.calculateEditDistanceSimilarity(query, entry.NormalizedRequest)
-	
+
 	if requestSimilarity > 0.7 {
 		return requestSimilarity, "Similar request pattern"
 	}
@@ -306,10 +306,10 @@ func (s *Search) calculateCombinedScore(result SearchResult) float64 {
 func (s *Search) normalizeQuery(query string) string {
 	// Convert to lowercase and trim
 	normalized := strings.ToLower(strings.TrimSpace(query))
-	
+
 	// Replace multiple spaces with single space
 	normalized = strings.Join(strings.Fields(normalized), " ")
-	
+
 	return normalized
 }
 
@@ -384,7 +384,7 @@ func (s *Search) calculateEditDistanceSimilarity(s1, s2 string) float64 {
 
 	distance := s.editDistance(s1, s2)
 	maxLen := max(len(s1), len(s2))
-	
+
 	if maxLen == 0 {
 		return 0.0
 	}
@@ -400,7 +400,7 @@ func (s *Search) calculateEditDistanceSimilarity(s1, s2 string) float64 {
 // editDistance calculates the edit distance between two strings
 func (s *Search) editDistance(s1, s2 string) int {
 	len1, len2 := len(s1), len(s2)
-	
+
 	// Create a matrix to store distances
 	matrix := make([][]int, len1+1)
 	for i := range matrix {
@@ -425,7 +425,7 @@ func (s *Search) editDistance(s1, s2 string) int {
 
 			matrix[i][j] = min(
 				min(matrix[i-1][j]+1, matrix[i][j-1]+1), // min of deletion and insertion
-				matrix[i-1][j-1]+cost, // substitution
+				matrix[i-1][j-1]+cost,                   // substitution
 			)
 		}
 	}

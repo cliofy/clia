@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	
+
 	"github.com/yourusername/clia/internal/tui"
 	"github.com/yourusername/clia/internal/version"
 )
@@ -20,7 +20,7 @@ func main() {
 			fmt.Printf("Error reading stdin: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		// Check if we have analysis commands
 		if len(os.Args) > 1 {
 			analysisCommand := strings.Join(os.Args[1:], " ")
@@ -91,7 +91,7 @@ func printHelp() {
 	fmt.Println("  to enable AI-powered command suggestions")
 	fmt.Println("\nANALYSIS MODE:")
 	fmt.Println("  cat data.csv | clia make table    Convert CSV to markdown table")
-	fmt.Println("  echo 'data' | clia analyze        Analyze input data")  
+	fmt.Println("  echo 'data' | clia analyze        Analyze input data")
 	fmt.Println("  tail -f log | clia summarize       Summarize log data")
 	fmt.Println("\nFor more information, visit: https://github.com/yourusername/clia")
 }
@@ -102,7 +102,7 @@ func hasStdinData() bool {
 	if err != nil {
 		return false
 	}
-	
+
 	// Check if stdin is a pipe or has data
 	return (stat.Mode() & os.ModeCharDevice) == 0
 }
@@ -113,7 +113,7 @@ func readStdinData() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(data), nil
 }
 

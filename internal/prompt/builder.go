@@ -41,15 +41,15 @@ func (b *PromptBuilder) BuildCommandPrompt(ctx context.Context, userInput string
 		// If context collection fails, use a fallback approach
 		return b.buildFallbackPrompt(userInput, err), nil
 	}
-	
+
 	// Build template
 	template := NewCommandPromptTemplate(userInput, envContext)
-	
+
 	// Enhance with examples if context is rich enough
 	if envContext.FileCount > 0 || envContext.DirectoryCount > 0 {
 		template = template.EnhanceWithExamples()
 	}
-	
+
 	return template.Build(), nil
 }
 
@@ -58,12 +58,12 @@ func (b *PromptBuilder) BuildQuickPrompt(userInput string) string {
 	// Use minimal context to avoid delays
 	os := "unknown"
 	shell := "bash"
-	
+
 	if quickContext, err := b.collector.Collect(); err == nil {
 		os = quickContext.OS
 		shell = quickContext.Shell
 	}
-	
+
 	return QuickCommandPrompt(userInput, os, shell)
 }
 
@@ -74,15 +74,15 @@ func (b *PromptBuilder) BuildCustomPrompt(template, userInput string, variables 
 	if err != nil {
 		return "", fmt.Errorf("failed to collect context: %w", err)
 	}
-	
+
 	// Build custom template
 	customTemplate := NewCustomPromptTemplate(template, userInput, envContext)
-	
+
 	// Set variables
 	for key, value := range variables {
 		customTemplate.SetVariable(key, value)
 	}
-	
+
 	return customTemplate.Build(), nil
 }
 
@@ -93,24 +93,24 @@ func (b *PromptBuilder) buildFallbackPrompt(userInput string, contextErr error) 
 Note: Unable to collect full environment context (%v). Provide general command suggestions.
 
 Respond with JSON format:
-{"commands":[{"cmd":"command","description":"description","confidence":0.7,"safe":true,"category":"general"}]}`, 
+{"commands":[{"cmd":"command","description":"description","confidence":0.7,"safe":true,"category":"general"}]}`,
 		userInput, contextErr)
-	
+
 	return fallbackPrompt
 }
 
 // ValidatePrompt checks if a prompt is valid and not too long
 func (b *PromptBuilder) ValidatePrompt(prompt string) error {
 	const maxPromptLength = 8000 // Reasonable limit to avoid token limits
-	
+
 	if prompt == "" {
 		return fmt.Errorf("prompt is empty")
 	}
-	
+
 	if len(prompt) > maxPromptLength {
 		return fmt.Errorf("prompt too long (%d characters, max %d)", len(prompt), maxPromptLength)
 	}
-	
+
 	return nil
 }
 

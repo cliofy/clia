@@ -55,7 +55,7 @@ func TestMemoryEntry(t *testing.T) {
 // TestNewMemory tests memory creation
 func TestNewMemory(t *testing.T) {
 	memory := NewMemory()
-	
+
 	if memory == nil {
 		t.Fatal("NewMemory should not return nil")
 	}
@@ -90,7 +90,7 @@ func TestStorage(t *testing.T) {
 	// Create temporary file
 	tempDir := t.TempDir()
 	tempFile := filepath.Join(tempDir, "test_memory.yaml")
-	
+
 	storage := NewStorage(tempFile)
 
 	// Test loading non-existent file (should return empty memory)
@@ -147,7 +147,7 @@ func TestManager(t *testing.T) {
 	// Create temporary file for testing
 	tempDir := t.TempDir()
 	tempFile := filepath.Join(tempDir, "test_memory.yaml")
-	
+
 	config := DefaultMemoryConfig()
 	config.MaxEntries = 5 // Small limit for testing
 
@@ -348,7 +348,7 @@ func TestSearchAlgorithms(t *testing.T) {
 func TestManagerCleanup(t *testing.T) {
 	tempDir := t.TempDir()
 	tempFile := filepath.Join(tempDir, "test_memory.yaml")
-	
+
 	config := DefaultMemoryConfig()
 	config.MaxEntries = 3
 	config.MinUsageCount = 2
@@ -388,14 +388,14 @@ func TestManagerCleanup(t *testing.T) {
 	// Check remaining entries
 	remainingEntries := manager.GetAll()
 	if len(remainingEntries) > config.MaxEntries {
-		t.Errorf("Expected at most %d entries after cleanup, got %d", 
+		t.Errorf("Expected at most %d entries after cleanup, got %d",
 			config.MaxEntries, len(remainingEntries))
 	}
 
 	// Verify low-usage entries were removed
 	for _, entry := range remainingEntries {
 		if entry.UsageCount < config.MinUsageCount {
-			t.Errorf("Entry with usage count %d should have been cleaned up", 
+			t.Errorf("Entry with usage count %d should have been cleaned up",
 				entry.UsageCount)
 		}
 	}
@@ -405,7 +405,7 @@ func TestManagerCleanup(t *testing.T) {
 func TestStorageBackup(t *testing.T) {
 	tempDir := t.TempDir()
 	tempFile := filepath.Join(tempDir, "test_memory.yaml")
-	
+
 	storage := NewStorage(tempFile)
 
 	// Create initial memory
@@ -463,7 +463,7 @@ func TestStorageBackup(t *testing.T) {
 // BenchmarkSearch benchmarks the search functionality
 func BenchmarkSearch(b *testing.B) {
 	search := NewSearch()
-	
+
 	// Create many test entries
 	entries := make([]MemoryEntry, 1000)
 	for i := 0; i < 1000; i++ {
@@ -480,7 +480,7 @@ func BenchmarkSearch(b *testing.B) {
 	}
 
 	options := DefaultSearchOptions()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := search.Search("test request", entries, options)

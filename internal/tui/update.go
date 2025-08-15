@@ -3,10 +3,10 @@ package tui
 import (
 	"fmt"
 	"strings"
-	
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	
+
 	"github.com/yourusername/clia/internal/ai"
 )
 
@@ -127,25 +127,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case aiProcessingMsg:
 		// Just update UI, processing state already set
-		
+
 	case aiResponseMsg:
 		m.handleAIResponse(msg)
 
 	case commandMsg:
 		// Command messages are handled in handleInputSubmit
-		
+
 	case providerSwitchMsg:
 		m.handleProviderSwitchMsg(msg)
-		
+
 	case modelListMsg:
 		m.handleModelListMsg(msg)
-		
+
 	case modelSwitchMsg:
 		m.handleModelSwitchMsg(msg)
-		
+
 	case apiKeyInputMsg:
 		m.handleAPIKeyInputMsg(msg)
-		
+
 	case apiKeySubmitMsg:
 		return m.handleAPIKeySubmitMsg(msg)
 
@@ -193,23 +193,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Memory-related messages
 	case memoryResultsMsg:
 		m.handleMemoryResults(msg)
-		
+
 	case memorySaveMsg:
 		if cmd := m.handleMemorySave(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-		
+
 	case memorySaveResultMsg:
 		m.handleMemorySaveResult(msg)
-		
+
 	case memorySelectionMsg:
 		if cmd := m.handleMemorySelection(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-		
+
 	case combinedSuggestionsMsg:
 		m.handleCombinedSuggestions(msg)
-		
+
+	// PTY execution messages
+	case ptyExecutionRequestMsg:
+		if cmd := m.handlePTYExecutionRequest(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case ptyExecutionCompleteMsg:
+		m.handlePTYExecutionComplete(msg)
+
 	case SpinnerTickMsg:
 		if m.showSpinner {
 			m.spinner = m.spinner.NextFrame()
@@ -236,10 +245,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateViewportContent()
 			}
 		}
-		
+
 	case startAnimationMsg:
 		// Animation started, no additional action needed
-		
+
 	case stopAnimationMsg:
 		m.showSpinner = false
 		m.pulseFrame = 0 // Reset pulse frame
@@ -261,14 +270,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-
 // handleProviderSwitchMsg handles provider switch results
 func (m *Model) handleProviderSwitchMsg(msg providerSwitchMsg) {
 	if msg.needsAPIKey {
 		m.addMessage(fmt.Sprintf("🔑 %s provider needs API key configuration", msg.providerType), MessageTypeSystem)
 		return
 	}
-	
+
 	if msg.success {
 		m.currentProvider = msg.providerType
 		// Get the new model from the provider
@@ -293,21 +301,21 @@ func (m *Model) handleModelListMsg(msg modelListMsg) {
 		m.addMessage("❌ Failed to fetch models: "+msg.error.Error(), MessageTypeError)
 		return
 	}
-	
+
 	if len(msg.models) == 0 {
 		m.addMessage("No models available for current provider", MessageTypeSystem)
 		return
 	}
-	
+
 	formatted := FormatModelList(msg.models, m.currentModel, 15) // Show first 15 models
 	m.addMessage(formatted, MessageTypeSystem)
-	
+
 	if len(msg.models) > 15 {
 		m.addMessage(fmt.Sprintf("Showing 15 of %d models. Use '/model <name>' to switch.", len(msg.models)), MessageTypeSystem)
 	}
 }
 
-// handleModelSwitchMsg handles model switch results  
+// handleModelSwitchMsg handles model switch results
 func (m *Model) handleModelSwitchMsg(msg modelSwitchMsg) {
 	if msg.success {
 		m.currentModel = msg.modelName
@@ -336,7 +344,7 @@ func (m *Model) handleAPIKeySubmitMsg(msg apiKeySubmitMsg) (tea.Model, tea.Cmd) 
 	// Validate and configure provider with the API key
 	return *m, tea.Cmd(func() tea.Msg {
 		providerType := ai.ProviderType(msg.providerType)
-		
+
 		// Validate API key
 		err := m.aiService.ValidateAPIKey(providerType, msg.apiKey)
 		if err != nil {
@@ -346,11 +354,11 @@ func (m *Model) handleAPIKeySubmitMsg(msg apiKeySubmitMsg) (tea.Model, tea.Cmd) 
 				error:        fmt.Errorf("invalid API key: %w", err),
 			}
 		}
-		
+
 		// Create config and switch provider
 		config := ai.DefaultProviderConfig(providerType)
 		config.APIKey = msg.apiKey
-		
+
 		err = m.aiService.SwitchProvider(providerType, config)
 		return providerSwitchMsg{
 			providerType: msg.providerType,

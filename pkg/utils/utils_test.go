@@ -11,11 +11,11 @@ func TestGetHomeDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetHomeDir() error = %v", err)
 	}
-	
+
 	if home == "" {
 		t.Error("Home directory should not be empty")
 	}
-	
+
 	// Check if the directory exists
 	if _, err := os.Stat(home); os.IsNotExist(err) {
 		t.Errorf("Home directory does not exist: %s", home)
@@ -27,16 +27,16 @@ func TestGetConfigDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetConfigDir() error = %v", err)
 	}
-	
+
 	if configDir == "" {
 		t.Error("Config directory should not be empty")
 	}
-	
+
 	// Should end with "clia"
 	if filepath.Base(configDir) != "clia" {
 		t.Errorf("Config directory should end with 'clia', got: %s", configDir)
 	}
-	
+
 	// Directory should exist (GetConfigDir creates it)
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		t.Errorf("Config directory was not created: %s", configDir)
@@ -55,7 +55,7 @@ func TestSanitizeAPIKey(t *testing.T) {
 		{"Very long key", "sk-proj-1234567890abcdefghijklmnop", "sk-p****mnop"},
 		{"Empty key", "", "****"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SanitizeAPIKey(tt.input)
@@ -76,14 +76,14 @@ func TestIsCommandSafe(t *testing.T) {
 		"date",
 		"whoami",
 	}
-	
+
 	unsafeCommands := []string{
 		"rm file.txt",
 		"sudo rm -rf /",
 		"chmod 777 file",
 		"dd if=/dev/zero of=file",
 	}
-	
+
 	for _, cmd := range safeCommands {
 		t.Run("safe: "+cmd, func(t *testing.T) {
 			if !IsCommandSafe(cmd) {
@@ -91,7 +91,7 @@ func TestIsCommandSafe(t *testing.T) {
 			}
 		})
 	}
-	
+
 	for _, cmd := range unsafeCommands {
 		t.Run("unsafe: "+cmd, func(t *testing.T) {
 			if IsCommandSafe(cmd) {
@@ -112,7 +112,7 @@ func TestIsDangerousCommand(t *testing.T) {
 		"chmod 777 /etc/passwd",
 		"sudo shutdown -h now",
 	}
-	
+
 	safeCommands := []string{
 		"ls -la",
 		"pwd",
@@ -120,7 +120,7 @@ func TestIsDangerousCommand(t *testing.T) {
 		"cat file.txt",
 		"head -n 10 file.txt",
 	}
-	
+
 	for _, cmd := range dangerousCommands {
 		t.Run("dangerous: "+cmd, func(t *testing.T) {
 			if !IsDangerousCommand(cmd) {
@@ -128,7 +128,7 @@ func TestIsDangerousCommand(t *testing.T) {
 			}
 		})
 	}
-	
+
 	for _, cmd := range safeCommands {
 		t.Run("safe: "+cmd, func(t *testing.T) {
 			if IsDangerousCommand(cmd) {

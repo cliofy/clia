@@ -2,7 +2,7 @@ package tui
 
 import (
 	"time"
-	
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/yourusername/clia/internal/ai"
 	"github.com/yourusername/clia/internal/executor"
@@ -328,12 +328,12 @@ func CommandOutputCmd(content string, isStderr bool) tea.Cmd {
 
 // commandCompleteMsg represents command execution completion
 type commandCompleteMsg struct {
-	command   string
-	exitCode  int
-	duration  time.Duration
-	stdout    string
-	stderr    string
-	error     error
+	command  string
+	exitCode int
+	duration time.Duration
+	stdout   string
+	stderr   string
+	error    error
 }
 
 // CommandCompleteCmd returns a command indicating command execution is complete
@@ -452,12 +452,12 @@ func MemoryResultsCmd(query string, results []memory.SearchResult, err error) te
 
 // memorySuggestion represents a memory-based command suggestion
 type memorySuggestion struct {
-	Entry       memory.MemoryEntry
-	Score       float64
-	Reason      string
-	MatchType   memory.MatchType
-	UsageCount  int
-	LastUsed    time.Time
+	Entry      memory.MemoryEntry
+	Score      float64
+	Reason     string
+	MatchType  memory.MatchType
+	UsageCount int
+	LastUsed   time.Time
 }
 
 // memorySelectionMsg represents selection of a memory suggestion
@@ -574,6 +574,44 @@ func CombinedSuggestionsCmd(userRequest string, aiSuggestions []aiSuggestion, me
 			userRequest:       userRequest,
 			aiSuggestions:     aiSuggestions,
 			memorySuggestions: memorySuggestions,
+		}
+	}
+}
+
+// PTY execution messages
+
+// ptyExecutionRequestMsg represents a request to execute a command with PTY
+type ptyExecutionRequestMsg struct {
+	command     string
+	description string
+}
+
+// PTYExecutionRequestCmd returns a command to execute with PTY
+func PTYExecutionRequestCmd(command, description string) tea.Cmd {
+	return func() tea.Msg {
+		return ptyExecutionRequestMsg{
+			command:     command,
+			description: description,
+		}
+	}
+}
+
+// ptyExecutionCompleteMsg represents completion of PTY execution
+type ptyExecutionCompleteMsg struct {
+	command  string
+	exitCode int
+	duration time.Duration
+	error    error
+}
+
+// PTYExecutionCompleteCmd returns a command indicating PTY execution completion
+func PTYExecutionCompleteCmd(command string, exitCode int, duration time.Duration, err error) tea.Cmd {
+	return func() tea.Msg {
+		return ptyExecutionCompleteMsg{
+			command:  command,
+			exitCode: exitCode,
+			duration: duration,
+			error:    err,
 		}
 	}
 }

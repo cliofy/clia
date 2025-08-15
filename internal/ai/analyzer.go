@@ -11,7 +11,7 @@ type AnalysisType string
 
 const (
 	AnalysisTypeTable     AnalysisType = "table"
-	AnalysisTypeAnalyze   AnalysisType = "analyze"  
+	AnalysisTypeAnalyze   AnalysisType = "analyze"
 	AnalysisTypeSummarize AnalysisType = "summarize"
 	AnalysisTypeFormat    AnalysisType = "format"
 	AnalysisTypeChart     AnalysisType = "chart"
@@ -27,19 +27,19 @@ type AnalysisRequest struct {
 
 // AnalysisResponse represents the response from data analysis
 type AnalysisResponse struct {
-	Result        string
-	OutputFormat  string
-	AnalysisType  AnalysisType
-	Error         error
+	Result       string
+	OutputFormat string
+	AnalysisType AnalysisType
+	Error        error
 }
 
 // parseAnalysisCommand parses the analysis command to determine type and parameters
 func parseAnalysisCommand(command string) AnalysisRequest {
 	command = strings.ToLower(strings.TrimSpace(command))
-	
+
 	var analysisType AnalysisType
 	var outputFormat string = "markdown"
-	
+
 	// Determine analysis type based on command
 	switch {
 	case strings.Contains(command, "make table") || strings.Contains(command, "table"):
@@ -62,7 +62,7 @@ func parseAnalysisCommand(command string) AnalysisRequest {
 		// Default to analysis if no specific type found
 		analysisType = AnalysisTypeAnalyze
 	}
-	
+
 	return AnalysisRequest{
 		AnalysisCommand: command,
 		AnalysisType:    analysisType,
@@ -75,38 +75,38 @@ func (s *Service) AnalyzeData(ctx context.Context, inputData, analysisCommand st
 	if s.provider == nil {
 		return nil, fmt.Errorf("no LLM provider configured")
 	}
-	
+
 	if !s.provider.IsConfigured() {
 		return nil, fmt.Errorf("LLM provider is not properly configured")
 	}
-	
+
 	// Parse the analysis command
 	request := parseAnalysisCommand(analysisCommand)
 	request.InputData = inputData
-	
+
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, s.requestTimeout)
 	defer cancel()
-	
+
 	// Build analysis prompt based on type
 	promptText, err := s.buildAnalysisPrompt(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build analysis prompt: %w", err)
 	}
-	
+
 	// Create completion request
 	completionReq := &CompletionRequest{
 		Prompt:      promptText,
 		MaxTokens:   2000, // Increase token limit for analysis results
 		Temperature: 0.1,  // Lower temperature for more consistent analysis
 	}
-	
+
 	// Call LLM provider
 	response, err := s.provider.Complete(ctx, completionReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get analysis from LLM: %w", err)
 	}
-	
+
 	// Return analysis response
 	return &AnalysisResponse{
 		Result:       response.Content,
@@ -120,7 +120,7 @@ func (s *Service) AnalyzeData(ctx context.Context, inputData, analysisCommand st
 func (s *Service) buildAnalysisPrompt(request AnalysisRequest) (string, error) {
 	// Detect data format
 	dataFormat := detectDataFormat(request.InputData)
-	
+
 	// Build prompt based on analysis type
 	switch request.AnalysisType {
 	case AnalysisTypeTable:
@@ -141,7 +141,7 @@ func (s *Service) buildAnalysisPrompt(request AnalysisRequest) (string, error) {
 // detectDataFormat attempts to detect the format of input data
 func detectDataFormat(data string) string {
 	data = strings.TrimSpace(data)
-	
+
 	// Check for CSV (comma-separated with header)
 	lines := strings.Split(data, "\n")
 	if len(lines) > 1 {
@@ -150,28 +150,28 @@ func detectDataFormat(data string) string {
 			return "csv"
 		}
 	}
-	
+
 	// Check for JSON
 	if strings.HasPrefix(data, "{") || strings.HasPrefix(data, "[") {
 		return "json"
 	}
-	
+
 	// Check for YAML
 	if strings.Contains(data, ":") && (strings.Contains(data, "\n") || strings.Contains(data, "---")) {
 		return "yaml"
 	}
-	
+
 	// Check for TSV (tab-separated)
 	if strings.Contains(data, "\t") {
 		return "tsv"
 	}
-	
+
 	// Check for log format (timestamp patterns)
-	if strings.Contains(data, "[") && strings.Contains(data, "]") && 
-	   (strings.Contains(data, "INFO") || strings.Contains(data, "ERROR") || strings.Contains(data, "DEBUG")) {
+	if strings.Contains(data, "[") && strings.Contains(data, "]") &&
+		(strings.Contains(data, "INFO") || strings.Contains(data, "ERROR") || strings.Contains(data, "DEBUG")) {
 		return "log"
 	}
-	
+
 	// Default to plain text
 	return "text"
 }

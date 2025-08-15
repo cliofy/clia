@@ -20,7 +20,7 @@ func ExtractPathContext(command string, cursorPos int) (*PathCompletionContext, 
 	if cursorPos < 0 || cursorPos > len(command) {
 		cursorPos = len(command)
 	}
-	
+
 	// Find the start of the current word (path segment)
 	startPos := cursorPos
 	for startPos > 0 {
@@ -31,29 +31,29 @@ func ExtractPathContext(command string, cursorPos int) (*PathCompletionContext, 
 		}
 		startPos--
 	}
-	
+
 	// Extract the path segment from start to cursor
 	pathSegment := command[startPos:cursorPos]
-	
+
 	// Skip if this doesn't look like a path
 	if pathSegment == "" || (!strings.Contains(pathSegment, "/") && !strings.HasPrefix(pathSegment, "~")) {
 		return nil, nil
 	}
-	
+
 	// Expand the path to get directory and prefix
 	dir, prefix := filepath.Split(pathSegment)
-	
+
 	// Handle special cases
 	if dir == "" {
 		dir = "."
 	}
-	
+
 	// Expand ~ and relative paths
 	expandedDir, err := ExpandPath(dir)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &PathCompletionContext{
 		Directory: expandedDir,
 		Prefix:    prefix,
@@ -67,7 +67,7 @@ func ExpandPath(path string) (string, error) {
 	if path == "" {
 		return ".", nil
 	}
-	
+
 	// Handle ~ expansion
 	if strings.HasPrefix(path, "~/") || path == "~" {
 		homeDir, err := GetHomeDir()
@@ -79,7 +79,7 @@ func ExpandPath(path string) (string, error) {
 		}
 		return filepath.Join(homeDir, path[2:]), nil
 	}
-	
+
 	// Handle relative paths
 	if !filepath.IsAbs(path) {
 		absPath, err := filepath.Abs(path)
@@ -88,7 +88,7 @@ func ExpandPath(path string) (string, error) {
 		}
 		return absPath, nil
 	}
-	
+
 	return path, nil
 }
 
@@ -99,28 +99,28 @@ func ScanDirectoryForCompletion(dir, prefix string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !dirInfo.IsDir() {
 		return nil, nil
 	}
-	
+
 	// Read directory contents
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var candidates []string
 	maxCandidates := 50 // Limit to avoid performance issues
-	
+
 	for _, entry := range entries {
 		name := entry.Name()
-		
+
 		// Skip hidden files unless prefix starts with .
 		if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
 			continue
 		}
-		
+
 		// Check if name matches prefix
 		if prefix == "" || strings.HasPrefix(name, prefix) {
 			// Add / suffix for directories
@@ -128,17 +128,17 @@ func ScanDirectoryForCompletion(dir, prefix string) ([]string, error) {
 				name += "/"
 			}
 			candidates = append(candidates, name)
-			
+
 			// Limit results for performance
 			if len(candidates) >= maxCandidates {
 				break
 			}
 		}
 	}
-	
+
 	// Sort candidates
 	sort.Strings(candidates)
-	
+
 	return candidates, nil
 }
 
@@ -147,15 +147,15 @@ func ApplyCompletion(command, completion string, startPos, endPos int) (string, 
 	if startPos < 0 || endPos < startPos || endPos > len(command) {
 		return command, len(command)
 	}
-	
+
 	// Replace the segment from startPos to endPos with completion
 	before := command[:startPos]
 	after := command[endPos:]
-	
+
 	// Find the directory part of the original path
 	originalSegment := command[startPos:endPos]
 	dir, _ := filepath.Split(originalSegment)
-	
+
 	// Build the new path by combining directory with completion
 	var newPath string
 	if dir == "" || dir == "." {
@@ -170,11 +170,11 @@ func ApplyCompletion(command, completion string, startPos, endPos int) (string, 
 			newPath = dir + completion
 		}
 	}
-	
+
 	// Build the new command
 	newCommand := before + newPath + after
 	newCursorPos := len(before + newPath)
-	
+
 	return newCommand, newCursorPos
 }
 
@@ -192,22 +192,22 @@ func IsPathLikeArgument(command string, cursorPos int) bool {
 	if cursorPos <= 0 {
 		return false
 	}
-	
+
 	// Look backwards for path-like patterns
 	for i := cursorPos - 1; i >= 0; i-- {
 		char := command[i]
-		
+
 		// Stop at whitespace
 		if char == ' ' || char == '\t' {
 			break
 		}
-		
+
 		// If we find path separators, this is likely a path
 		if char == '/' || (i > 0 && command[i-1:i+1] == "~/") {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -217,7 +217,7 @@ func CompletePartialPath(dir, prefix string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Filter out exact matches when we have a prefix
 	if prefix != "" {
 		var filtered []string
@@ -230,6 +230,6 @@ func CompletePartialPath(dir, prefix string) ([]string, error) {
 		}
 		return filtered, nil
 	}
-	
+
 	return candidates, nil
 }

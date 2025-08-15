@@ -20,9 +20,9 @@ func NewManager() (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config directory: %w", err)
 	}
-	
+
 	configPath := filepath.Join(configDir, "config.yaml")
-	
+
 	return &Manager{
 		configPath: configPath,
 		config:     DefaultConfig(),
@@ -36,11 +36,11 @@ func (m *Manager) Load() error {
 		// Config file doesn't exist, use defaults
 		return nil
 	}
-	
+
 	// For now, just use defaults
 	// In a full implementation, we would use viper or similar to load YAML
 	// This is sufficient for Phase 2 demonstration
-	
+
 	return nil
 }
 
@@ -51,7 +51,7 @@ func (m *Manager) Save() error {
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	// For now, just create an empty config file
 	// In a full implementation, we would marshal the config to YAML
 	file, err := os.Create(m.configPath)
@@ -59,7 +59,7 @@ func (m *Manager) Save() error {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
 	defer file.Close()
-	
+
 	// Write a basic config template
 	template := `# clia configuration file
 api:
@@ -120,7 +120,7 @@ providers:
 # export OPENROUTER_API_KEY="your-openrouter-key"  
 # export ANTHROPIC_API_KEY="your-anthropic-key"
 `
-	
+
 	_, err = file.WriteString(template)
 	return err
 }
@@ -154,7 +154,7 @@ func (m *Manager) GetActiveProviderConfig() (*Provider, bool) {
 // GetAPIKeyFromEnv gets the API key from environment variables
 func (m *Manager) GetAPIKeyFromEnv() string {
 	provider := m.config.API.Provider
-	
+
 	switch provider {
 	case "openai":
 		return os.Getenv("OPENAI_API_KEY")
@@ -178,7 +178,7 @@ func (m *Manager) IsProviderConfigured() bool {
 	if apiKey == "" {
 		apiKey = m.GetAPIKeyFromEnv()
 	}
-	
+
 	return apiKey != ""
 }
 
@@ -199,37 +199,37 @@ func (m *Manager) ListProviders() []string {
 // ValidateConfig validates the current configuration
 func (m *Manager) ValidateConfig() error {
 	config := m.config
-	
+
 	// Validate API config
 	if config.API.Provider == "" {
 		return fmt.Errorf("API provider is required")
 	}
-	
+
 	if config.API.MaxTokens <= 0 {
 		return fmt.Errorf("max_tokens must be greater than 0")
 	}
-	
+
 	if config.API.Temperature < 0 || config.API.Temperature > 2 {
 		return fmt.Errorf("temperature must be between 0 and 2")
 	}
-	
+
 	// Validate UI config
 	if config.UI.HistorySize < 0 {
 		return fmt.Errorf("history_size cannot be negative")
 	}
-	
+
 	// Validate Context config
 	if config.Context.MaxFilesInContext < 0 {
 		return fmt.Errorf("max_files_in_context cannot be negative")
 	}
-	
+
 	return nil
 }
 
 // GetConfigSummary returns a summary of the current configuration
 func (m *Manager) GetConfigSummary() map[string]interface{} {
 	config := m.config
-	
+
 	summary := map[string]interface{}{
 		"api": map[string]interface{}{
 			"provider":    config.API.Provider,
@@ -244,16 +244,16 @@ func (m *Manager) GetConfigSummary() map[string]interface{} {
 			"history_size": config.UI.HistorySize,
 		},
 		"behavior": map[string]interface{}{
-			"auto_execute_safe":        config.Behavior.AutoExecuteSafeCommands,
-			"confirm_dangerous":        config.Behavior.ConfirmDangerousCommands,
-			"collect_stats":           config.Behavior.CollectUsageStats,
+			"auto_execute_safe": config.Behavior.AutoExecuteSafeCommands,
+			"confirm_dangerous": config.Behavior.ConfirmDangerousCommands,
+			"collect_stats":     config.Behavior.CollectUsageStats,
 		},
 		"context": map[string]interface{}{
-			"include_hidden":    config.Context.IncludeHiddenFiles,
+			"include_hidden":   config.Context.IncludeHiddenFiles,
 			"max_files":        config.Context.MaxFilesInContext,
 			"include_env_vars": config.Context.IncludeEnvVars,
 		},
 	}
-	
+
 	return summary
 }

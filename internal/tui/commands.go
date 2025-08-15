@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"strings"
 	"github.com/yourusername/clia/internal/ai"
+	"strings"
 )
 
 // Command represents a parsed command
@@ -23,30 +23,30 @@ const (
 // ParseCommand parses user input to extract commands
 func ParseCommand(input string) *Command {
 	input = strings.TrimSpace(input)
-	
+
 	// Check if it's a command (starts with /)
 	if !strings.HasPrefix(input, "/") {
 		return nil
 	}
-	
+
 	// Remove the leading slash and split by spaces
 	cmdStr := input[1:]
 	parts := strings.Fields(cmdStr)
-	
+
 	if len(parts) == 0 {
 		return nil
 	}
-	
+
 	command := &Command{
 		Type: strings.ToLower(parts[0]),
 		Raw:  input,
 	}
-	
+
 	// Extract arguments
 	if len(parts) > 1 {
 		command.Args = parts[1:]
 	}
-	
+
 	return command
 }
 
@@ -86,20 +86,20 @@ func ValidateProviderCommand(args []string) error {
 	if len(args) == 0 {
 		return nil // List providers command
 	}
-	
+
 	if len(args) != 1 {
 		return ErrInvalidProviderArgs
 	}
-	
+
 	providerName := strings.ToLower(args[0])
 	validProviders := []string{"openai", "openrouter", "anthropic", "ollama"}
-	
+
 	for _, valid := range validProviders {
 		if providerName == valid {
 			return nil
 		}
 	}
-	
+
 	return ErrInvalidProviderName
 }
 
@@ -108,27 +108,27 @@ func ValidateModelCommand(args []string) error {
 	if len(args) == 0 {
 		return nil // List models command
 	}
-	
+
 	if len(args) != 1 {
 		return ErrInvalidModelArgs
 	}
-	
+
 	// Model name validation (basic check)
 	modelName := strings.TrimSpace(args[0])
 	if modelName == "" {
 		return ErrEmptyModelName
 	}
-	
+
 	return nil
 }
 
 // Command errors
 var (
-	ErrInvalidProviderArgs  = &CommandError{Type: "validation", Message: "Invalid provider command. Usage: /provider [provider_name]"}
-	ErrInvalidProviderName  = &CommandError{Type: "validation", Message: "Invalid provider name. Available: openai, openrouter, anthropic, ollama"}
-	ErrInvalidModelArgs     = &CommandError{Type: "validation", Message: "Invalid model command. Usage: /model [model_name]"}
-	ErrEmptyModelName       = &CommandError{Type: "validation", Message: "Model name cannot be empty"}
-	ErrCommandNotSupported  = &CommandError{Type: "unsupported", Message: "Command not supported"}
+	ErrInvalidProviderArgs = &CommandError{Type: "validation", Message: "Invalid provider command. Usage: /provider [provider_name]"}
+	ErrInvalidProviderName = &CommandError{Type: "validation", Message: "Invalid provider name. Available: openai, openrouter, anthropic, ollama"}
+	ErrInvalidModelArgs    = &CommandError{Type: "validation", Message: "Invalid model command. Usage: /model [model_name]"}
+	ErrEmptyModelName      = &CommandError{Type: "validation", Message: "Model name cannot be empty"}
+	ErrCommandNotSupported = &CommandError{Type: "unsupported", Message: "Command not supported"}
 )
 
 // CommandError represents a command-specific error
@@ -150,25 +150,25 @@ type CommandHandler interface {
 func FormatProviderList(providers map[string]ProviderStatus, currentProvider string) string {
 	var lines []string
 	lines = append(lines, "Available providers:")
-	
+
 	for name, status := range providers {
 		indicator := "✗"
 		statusText := "not configured"
-		
+
 		if status.Configured {
 			indicator = "✓"
 			statusText = "configured"
 		}
-		
+
 		current := ""
 		if name == currentProvider {
 			current = " - Current"
 		}
-		
+
 		line := "  " + indicator + " " + name + " (" + statusText + ")" + current
 		lines = append(lines, line)
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -176,7 +176,7 @@ func FormatProviderList(providers map[string]ProviderStatus, currentProvider str
 func FormatModelList(models []ai.ModelInfo, currentModel string, limit int) string {
 	var lines []string
 	lines = append(lines, "Available models:")
-	
+
 	displayed := 0
 	for _, model := range models {
 		if limit > 0 && displayed >= limit {
@@ -184,26 +184,26 @@ func FormatModelList(models []ai.ModelInfo, currentModel string, limit int) stri
 			lines = append(lines, "  ... and "+string(rune(remaining))+" more models")
 			break
 		}
-		
+
 		current := ""
 		if model.ID == currentModel || model.Name == currentModel {
 			current = " - Current"
 		}
-		
+
 		pricing := ""
 		if model.Pricing != "" {
 			pricing = " (" + model.Pricing + ")"
 		}
-		
+
 		line := "  " + model.ID + pricing + current
 		if model.Description != "" && model.Description != model.ID {
 			line += " - " + model.Description
 		}
-		
+
 		lines = append(lines, line)
 		displayed++
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -221,20 +221,20 @@ func FormatStatusInfo(currentProvider, currentModel string, providerInfo map[str
 	lines = append(lines, "Current Configuration:")
 	lines = append(lines, "  Provider: "+currentProvider)
 	lines = append(lines, "  Model: "+currentModel)
-	
+
 	if configured, ok := providerInfo["configured"].(bool); ok && configured {
 		lines = append(lines, "  Status: ✅ Ready")
 	} else {
 		lines = append(lines, "  Status: ❌ Not configured")
 	}
-	
+
 	if timeout, ok := providerInfo["timeout"].(string); ok {
 		lines = append(lines, "  Timeout: "+timeout)
 	}
-	
+
 	if fallbackMode, ok := providerInfo["fallback_mode"].(bool); ok && fallbackMode {
 		lines = append(lines, "  Fallback Mode: Enabled")
 	}
-	
+
 	return strings.Join(lines, "\n")
 }

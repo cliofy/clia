@@ -33,21 +33,21 @@ type Metadata struct {
 
 // SearchResult represents a memory search result with relevance score
 type SearchResult struct {
-	Entry      MemoryEntry `json:"entry"`
-	Score      float64     `json:"score"`      // Relevance score (0.0 - 1.0)
-	Reason     string      `json:"reason"`     // Why this result was matched
-	MatchType  MatchType   `json:"match_type"` // Type of match
+	Entry     MemoryEntry `json:"entry"`
+	Score     float64     `json:"score"`      // Relevance score (0.0 - 1.0)
+	Reason    string      `json:"reason"`     // Why this result was matched
+	MatchType MatchType   `json:"match_type"` // Type of match
 }
 
 // MatchType represents the type of match found
 type MatchType string
 
 const (
-	MatchTypeExact     MatchType = "exact"     // Exact string match
-	MatchTypeFuzzy     MatchType = "fuzzy"     // Fuzzy string match
-	MatchTypeKeyword   MatchType = "keyword"   // Keyword-based match
-	MatchTypeSemantic  MatchType = "semantic"  // Semantic similarity
-	MatchTypeCommand   MatchType = "command"   // Command pattern match
+	MatchTypeExact    MatchType = "exact"    // Exact string match
+	MatchTypeFuzzy    MatchType = "fuzzy"    // Fuzzy string match
+	MatchTypeKeyword  MatchType = "keyword"  // Keyword-based match
+	MatchTypeSemantic MatchType = "semantic" // Semantic similarity
+	MatchTypeCommand  MatchType = "command"  // Command pattern match
 )
 
 // SearchOptions represents options for memory search
@@ -62,32 +62,32 @@ type SearchOptions struct {
 type SortBy string
 
 const (
-	SortByRelevance  SortBy = "relevance"   // Sort by relevance score
-	SortByFrequency  SortBy = "frequency"   // Sort by usage count
-	SortByRecency    SortBy = "recency"     // Sort by timestamp
-	SortByCombined   SortBy = "combined"    // Combined score
+	SortByRelevance SortBy = "relevance" // Sort by relevance score
+	SortByFrequency SortBy = "frequency" // Sort by usage count
+	SortByRecency   SortBy = "recency"   // Sort by timestamp
+	SortByCombined  SortBy = "combined"  // Combined score
 )
 
 // MemoryConfig represents configuration for memory management
 type MemoryConfig struct {
-	MaxEntries       int           `yaml:"max_entries" json:"max_entries"`             // Maximum number of entries to keep
-	MaxFileSize      int64         `yaml:"max_file_size" json:"max_file_size"`         // Maximum file size in bytes
-	CleanupInterval  time.Duration `yaml:"cleanup_interval" json:"cleanup_interval"`   // How often to cleanup old entries
-	MinUsageCount    int           `yaml:"min_usage_count" json:"min_usage_count"`     // Minimum usage count to keep entry
-	MaxAge           time.Duration `yaml:"max_age" json:"max_age"`                     // Maximum age for entries
-	BackupCount      int           `yaml:"backup_count" json:"backup_count"`           // Number of backup files to keep
-	EnableCompression bool         `yaml:"enable_compression" json:"enable_compression"` // Enable gzip compression
+	MaxEntries        int           `yaml:"max_entries" json:"max_entries"`               // Maximum number of entries to keep
+	MaxFileSize       int64         `yaml:"max_file_size" json:"max_file_size"`           // Maximum file size in bytes
+	CleanupInterval   time.Duration `yaml:"cleanup_interval" json:"cleanup_interval"`     // How often to cleanup old entries
+	MinUsageCount     int           `yaml:"min_usage_count" json:"min_usage_count"`       // Minimum usage count to keep entry
+	MaxAge            time.Duration `yaml:"max_age" json:"max_age"`                       // Maximum age for entries
+	BackupCount       int           `yaml:"backup_count" json:"backup_count"`             // Number of backup files to keep
+	EnableCompression bool          `yaml:"enable_compression" json:"enable_compression"` // Enable gzip compression
 }
 
 // DefaultMemoryConfig returns the default configuration
 func DefaultMemoryConfig() MemoryConfig {
 	return MemoryConfig{
-		MaxEntries:       1000,
-		MaxFileSize:      10 * 1024 * 1024, // 10MB
-		CleanupInterval:  24 * time.Hour,
-		MinUsageCount:    1,
-		MaxAge:           90 * 24 * time.Hour, // 90 days
-		BackupCount:      3,
+		MaxEntries:        1000,
+		MaxFileSize:       10 * 1024 * 1024, // 10MB
+		CleanupInterval:   24 * time.Hour,
+		MinUsageCount:     1,
+		MaxAge:            90 * 24 * time.Hour, // 90 days
+		BackupCount:       3,
 		EnableCompression: false,
 	}
 }

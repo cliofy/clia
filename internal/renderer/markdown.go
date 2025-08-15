@@ -37,19 +37,19 @@ func NewMarkdownRenderer(opts *RendererOptions) (*MarkdownRenderer, error) {
 	if opts == nil {
 		opts = DefaultRendererOptions()
 	}
-	
+
 	// Calculate glamour render width accounting for margins/padding
 	const glamourGutter = 2
 	glamourWidth := opts.Width - glamourGutter
 	if glamourWidth < 20 {
 		glamourWidth = 20 // Minimum readable width
 	}
-	
+
 	// Configure glamour renderer options
 	rendererOpts := []glamour.TermRendererOption{
 		glamour.WithWordWrap(glamourWidth),
 	}
-	
+
 	// Set style
 	switch opts.Style {
 	case "auto":
@@ -68,13 +68,13 @@ func NewMarkdownRenderer(opts *RendererOptions) (*MarkdownRenderer, error) {
 			rendererOpts = append(rendererOpts, glamour.WithAutoStyle())
 		}
 	}
-	
+
 	// Create renderer
 	renderer, err := glamour.NewTermRenderer(rendererOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create glamour renderer: %w", err)
 	}
-	
+
 	return &MarkdownRenderer{
 		renderer: renderer,
 		width:    opts.Width,
@@ -87,16 +87,16 @@ func (r *MarkdownRenderer) Render(markdown string) (string, error) {
 	if markdown == "" {
 		return "", nil
 	}
-	
+
 	// Clean up markdown (remove excessive whitespace)
 	markdown = strings.TrimSpace(markdown)
-	
+
 	// Render with glamour
 	result, err := r.renderer.Render(markdown)
 	if err != nil {
 		return "", fmt.Errorf("failed to render markdown: %w", err)
 	}
-	
+
 	return result, nil
 }
 
@@ -108,7 +108,7 @@ func (r *MarkdownRenderer) RenderWithTitle(title, markdown string) (string, erro
 			markdown = fmt.Sprintf("# %s\n\n%s", title, markdown)
 		}
 	}
-	
+
 	return r.Render(markdown)
 }
 
@@ -120,12 +120,12 @@ func (r *MarkdownRenderer) SetWidth(width int) error {
 		Style:    r.style,
 		WordWrap: true,
 	}
-	
+
 	newRenderer, err := NewMarkdownRenderer(opts)
 	if err != nil {
 		return err
 	}
-	
+
 	r.renderer = newRenderer.renderer
 	r.width = width
 	return nil
@@ -142,16 +142,16 @@ func (r *MarkdownRenderer) PreviewMarkdown(markdown string, maxLines int) (strin
 	if err != nil {
 		return "", err
 	}
-	
+
 	lines := strings.Split(rendered, "\n")
 	if len(lines) <= maxLines {
 		return rendered, nil
 	}
-	
+
 	// Take first maxLines and add truncation indicator
 	preview := strings.Join(lines[:maxLines], "\n")
 	preview += "\n\n... (truncated)"
-	
+
 	return preview, nil
 }
 
@@ -166,13 +166,13 @@ func (r *MarkdownRenderer) RenderTable(tableMarkdown string) (string, error) {
 	// Ensure proper table formatting
 	lines := strings.Split(tableMarkdown, "\n")
 	var formattedLines []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		// Ensure table rows start and end with |
 		if strings.Contains(line, "|") && !strings.HasPrefix(line, "|") {
 			line = "|" + line
@@ -180,10 +180,10 @@ func (r *MarkdownRenderer) RenderTable(tableMarkdown string) (string, error) {
 		if strings.Contains(line, "|") && !strings.HasSuffix(line, "|") {
 			line = line + "|"
 		}
-		
+
 		formattedLines = append(formattedLines, line)
 	}
-	
+
 	formattedTable := strings.Join(formattedLines, "\n")
 	return r.Render(formattedTable)
 }
@@ -197,7 +197,7 @@ func (r *MarkdownRenderer) RenderCodeBlock(content, language string) (string, er
 // RenderList renders content as a markdown list
 func (r *MarkdownRenderer) RenderList(items []string, ordered bool) (string, error) {
 	var listMarkdown strings.Builder
-	
+
 	for i, item := range items {
 		if ordered {
 			listMarkdown.WriteString(fmt.Sprintf("%d. %s\n", i+1, item))
@@ -205,7 +205,7 @@ func (r *MarkdownRenderer) RenderList(items []string, ordered bool) (string, err
 			listMarkdown.WriteString(fmt.Sprintf("- %s\n", item))
 		}
 	}
-	
+
 	return r.Render(listMarkdown.String())
 }
 
@@ -213,7 +213,7 @@ func (r *MarkdownRenderer) RenderList(items []string, ordered bool) (string, err
 func GetSupportedStyles() []string {
 	return []string{
 		"auto",
-		"dark", 
+		"dark",
 		"light",
 		"notty",
 		"ascii",
@@ -232,7 +232,7 @@ func GetStyleDescription(style string) string {
 	descriptions := map[string]string{
 		"auto":            "Automatically detect terminal capabilities",
 		"dark":            "Dark theme optimized for dark terminals",
-		"light":           "Light theme optimized for light terminals", 
+		"light":           "Light theme optimized for light terminals",
 		"notty":           "Plain text output without colors",
 		"ascii":           "ASCII-only output for maximum compatibility",
 		"base16":          "Base16 color scheme",
@@ -243,7 +243,7 @@ func GetStyleDescription(style string) string {
 		"solarized-dark":  "Solarized dark theme",
 		"solarized-light": "Solarized light theme",
 	}
-	
+
 	if desc, exists := descriptions[style]; exists {
 		return desc
 	}

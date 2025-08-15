@@ -15,13 +15,13 @@ func (m Model) View() string {
 
 	// Render status bar
 	statusBar := m.renderStatusBar()
-	
+
 	// Render content area
 	content := m.renderContent()
-	
+
 	// Render input area
 	inputArea := m.renderInputArea()
-	
+
 	// Render help text
 	help := m.renderHelp()
 
@@ -43,23 +43,23 @@ func (m Model) renderStatusBar() string {
 		statusText = fmt.Sprintf("%s %s", m.spinner.View(), statusText)
 	}
 	leftStatus := statusStyle.Render(fmt.Sprintf("clia • %s", statusText))
-	
+
 	// Right side: message count and dimensions
-	rightStatus := encodingStyle.Render(fmt.Sprintf("Messages: %d | %dx%d", 
+	rightStatus := encodingStyle.Render(fmt.Sprintf("Messages: %d | %dx%d",
 		len(m.messages), m.width, m.height))
-	
+
 	// Calculate spacing
 	statusBarWidth := m.width
 	usedWidth := lipgloss.Width(leftStatus) + lipgloss.Width(rightStatus)
 	spacer := strings.Repeat(" ", max(0, statusBarWidth-usedWidth))
-	
+
 	return statusBarStyle.Render(leftStatus + spacer + rightStatus)
 }
 
 // renderContent renders the main content area with message history
 func (m Model) renderContent() string {
 	content := contentStyle.Render(m.viewport.View())
-	
+
 	// Apply border and styling
 	return baseStyle.
 		Width(m.width - 2).
@@ -83,17 +83,17 @@ func (m Model) renderInputArea() string {
 	} else {
 		style = inputStyle
 	}
-	
+
 	// Render the input with label
 	inputLabel := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("86")).
 		Bold(true).
 		Render("❯ ")
-	
+
 	inputField := m.input.View()
-	
+
 	inputContent := inputLabel + inputField
-	
+
 	return style.
 		Width(m.width - 2).
 		Render(inputContent)

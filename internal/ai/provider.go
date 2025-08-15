@@ -10,16 +10,16 @@ import (
 type LLMProvider interface {
 	// Complete performs a completion request
 	Complete(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error)
-	
+
 	// ValidateConfig validates the provider configuration
 	ValidateConfig() error
-	
+
 	// GetName returns the provider name
 	GetName() string
-	
+
 	// GetModel returns the current model being used
 	GetModel() string
-	
+
 	// IsConfigured returns true if the provider is properly configured
 	IsConfigured() bool
 }
@@ -28,9 +28,9 @@ type LLMProvider interface {
 type ProviderType string
 
 const (
-	ProviderTypeOpenAI    ProviderType = "openai"
-	ProviderTypeAnthropic ProviderType = "anthropic"
-	ProviderTypeOllama    ProviderType = "ollama"
+	ProviderTypeOpenAI     ProviderType = "openai"
+	ProviderTypeAnthropic  ProviderType = "anthropic"
+	ProviderTypeOllama     ProviderType = "ollama"
 	ProviderTypeOpenRouter ProviderType = "openrouter"
 )
 
@@ -44,16 +44,16 @@ func NewProviderFactory() *ProviderFactory {
 	factory := &ProviderFactory{
 		providers: make(map[ProviderType]func(*ProviderConfig) LLMProvider),
 	}
-	
+
 	// Register built-in providers
 	factory.Register(ProviderTypeOpenAI, func(config *ProviderConfig) LLMProvider {
 		return NewOpenAIProvider(config)
 	})
-	
+
 	factory.Register(ProviderTypeOpenRouter, func(config *ProviderConfig) LLMProvider {
 		return NewOpenRouterProvider(config)
 	})
-	
+
 	return factory
 }
 
@@ -68,12 +68,12 @@ func (f *ProviderFactory) Create(providerType ProviderType, config *ProviderConf
 	if !exists {
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)
 	}
-	
+
 	provider := constructor(config)
 	if err := provider.ValidateConfig(); err != nil {
 		return nil, fmt.Errorf("provider configuration invalid: %w", err)
 	}
-	
+
 	return provider, nil
 }
 
@@ -94,7 +94,7 @@ func DefaultProviderConfig(providerType ProviderType) *ProviderConfig {
 		MaxTokens:   1000,
 		Temperature: 0.7,
 	}
-	
+
 	switch providerType {
 	case ProviderTypeOpenAI:
 		base.Model = "gpt-3.5-turbo"
@@ -109,16 +109,16 @@ func DefaultProviderConfig(providerType ProviderType) *ProviderConfig {
 		base.Model = "openai/gpt-3.5-turbo"
 		base.Endpoint = "https://openrouter.ai/api/v1"
 	}
-	
+
 	return base
 }
 
 // MockProvider is a mock implementation for testing
 type MockProvider struct {
-	name        string
-	model       string
-	configured  bool
-	mockError   error
+	name         string
+	model        string
+	configured   bool
+	mockError    error
 	mockResponse *CompletionResponse
 }
 
@@ -136,11 +136,11 @@ func (m *MockProvider) Complete(ctx context.Context, req *CompletionRequest) (*C
 	if m.mockError != nil {
 		return nil, m.mockError
 	}
-	
+
 	if m.mockResponse != nil {
 		return m.mockResponse, nil
 	}
-	
+
 	// Default mock response
 	return &CompletionResponse{
 		Content: "Mock response for: " + req.Prompt,

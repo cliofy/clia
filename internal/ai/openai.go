@@ -21,18 +21,18 @@ type OpenAIProvider struct {
 // NewOpenAIProvider creates a new OpenAI provider
 func NewOpenAIProvider(config *ProviderConfig) *OpenAIProvider {
 	var client *openai.Client
-	
+
 	if config.APIKey != "" {
 		clientConfig := openai.DefaultConfig(config.APIKey)
-		
+
 		// Set custom endpoint if provided
 		if config.Endpoint != "" && config.Endpoint != "https://api.openai.com/v1" {
 			clientConfig.BaseURL = config.Endpoint
 		}
-		
+
 		client = openai.NewClientWithConfig(clientConfig)
 	}
-	
+
 	return &OpenAIProvider{
 		client: client,
 		config: config,
@@ -44,14 +44,14 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *CompletionRequest) (
 	if p.client == nil {
 		return nil, NewAIError(ErrorTypeAuth, "OpenAI client not configured", nil)
 	}
-	
+
 	// Create context with timeout
 	if p.config.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, p.config.Timeout)
 		defer cancel()
 	}
-	
+
 	// Prepare the request
 	chatReq := openai.ChatCompletionRequest{
 		Model: p.config.Model,
@@ -64,18 +64,18 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *CompletionRequest) (
 		MaxTokens:   p.config.MaxTokens,
 		Temperature: p.config.Temperature,
 	}
-	
+
 	// Make the API call
 	resp, err := p.client.CreateChatCompletion(ctx, chatReq)
 	if err != nil {
 		return nil, p.handleOpenAIError(err)
 	}
-	
+
 	// Parse the response
 	if len(resp.Choices) == 0 {
 		return nil, NewAIError(ErrorTypeParsing, "no choices returned from OpenAI", nil)
 	}
-	
+
 	content := resp.Choices[0].Message.Content
 	suggestions, parseErr := p.parseCommandSuggestions(content)
 	if parseErr != nil {
@@ -90,7 +90,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *CompletionRequest) (
 			},
 		}
 	}
-	
+
 	return &CompletionResponse{
 		Content:     content,
 		Suggestions: suggestions,
@@ -109,23 +109,23 @@ func (p *OpenAIProvider) ValidateConfig() error {
 	if p.config == nil {
 		return fmt.Errorf("provider config is nil")
 	}
-	
+
 	if p.config.APIKey == "" {
 		return fmt.Errorf("OpenAI API key is required")
 	}
-	
+
 	if p.config.Model == "" {
 		return fmt.Errorf("OpenAI model is required")
 	}
-	
+
 	if p.config.MaxTokens <= 0 {
 		return fmt.Errorf("max_tokens must be greater than 0")
 	}
-	
+
 	if p.config.Temperature < 0 || p.config.Temperature > 2 {
 		return fmt.Errorf("temperature must be between 0 and 2")
 	}
-	
+
 	return nil
 }
 
@@ -151,7 +151,7 @@ func (p *OpenAIProvider) IsConfigured() bool {
 func (p *OpenAIProvider) parseCommandSuggestions(content string) ([]CommandSuggestion, error) {
 	// Try to find JSON in the response
 	content = strings.TrimSpace(content)
-	
+
 	// Look for JSON block markers
 	if strings.Contains(content, "```json") {
 		start := strings.Index(content, "```json") + 7
@@ -166,37 +166,37 @@ func (p *OpenAIProvider) parseCommandSuggestions(content string) ([]CommandSugge
 			content = content[start : start+end]
 		}
 	}
-	
+
 	// Try to parse as JSON
 	var result struct {
 		Commands []CommandSuggestion `json:"commands"`
 	}
-	
+
 	if err := json.Unmarshal([]byte(content), &result); err != nil {
 		return nil, err
 	}
-	
+
 	// Validate and enhance suggestions
 	for i := range result.Commands {
 		if result.Commands[i].Command == "" {
 			continue
 		}
-		
+
 		// Set safety flag based on command analysis
-		result.Commands[i].Safe = utils.IsCommandSafe(result.Commands[i].Command) && 
-								  !utils.IsDangerousCommand(result.Commands[i].Command)
-		
+		result.Commands[i].Safe = utils.IsCommandSafe(result.Commands[i].Command) &&
+			!utils.IsDangerousCommand(result.Commands[i].Command)
+
 		// Set default confidence if not provided
 		if result.Commands[i].Confidence == 0 {
 			result.Commands[i].Confidence = 0.7
 		}
-		
+
 		// Set default category
 		if result.Commands[i].Category == "" {
 			result.Commands[i].Category = "general"
 		}
 	}
-	
+
 	return result.Commands, nil
 }
 
@@ -215,17 +215,17 @@ func (p *OpenAIProvider) handleOpenAIError(err error) error {
 			return NewAIError(ErrorTypeUnknown, fmt.Sprintf("OpenAI API error: %s", requestErr.Error()), err)
 		}
 	}
-	
+
 	// Check for network errors
 	if strings.Contains(err.Error(), "context deadline exceeded") {
 		return NewAIError(ErrorTypeNetwork, "Request timeout", err)
 	}
-	
-	if strings.Contains(err.Error(), "no such host") || 
-	   strings.Contains(err.Error(), "connection refused") {
+
+	if strings.Contains(err.Error(), "no such host") ||
+		strings.Contains(err.Error(), "connection refused") {
 		return NewAIError(ErrorTypeNetwork, "Network connection error", err)
 	}
-	
+
 	return NewAIError(ErrorTypeUnknown, "Unexpected error", err)
 }
 
@@ -234,17 +234,17 @@ func (p *OpenAIProvider) TestConnection(ctx context.Context) error {
 	if !p.IsConfigured() {
 		return NewAIError(ErrorTypeAuth, "Provider not configured", nil)
 	}
-	
+
 	// Create a simple test request
 	testReq := &CompletionRequest{
 		Prompt:    "Say 'connection test successful' if you can read this.",
 		MaxTokens: 10,
 	}
-	
+
 	// Set a short timeout for connection test
 	testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	_, err := p.Complete(testCtx, testReq)
 	return err
 }
@@ -254,9 +254,9 @@ func (p *OpenAIProvider) SwitchModel(modelName string) error {
 	if p.config == nil {
 		return fmt.Errorf("provider config is nil")
 	}
-	
+
 	// Update the model in config
 	p.config.Model = modelName
-	
+
 	return nil
 }
