@@ -28,6 +28,11 @@ func NewExecutor() Executor {
 	}
 }
 
+// NewPTYExecutor is an alias for NewExecutor for clarity
+func NewPTYExecutor() Executor {
+	return NewExecutor()
+}
+
 // Execute runs a command in a PTY and captures its output
 func (e *ptyExecutor) Execute(cmd string) (*Result, error) {
 	return e.ExecuteWithTimeout(cmd, 30*time.Second) // Default 30 second timeout

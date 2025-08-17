@@ -1,0 +1,197 @@
+package commands
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/fatih/color"
+	"github.com/spf13/cobra"
+	"github.com/yourusername/clia/core/executor"
+)
+
+// NewSessionCommand creates the session command
+func NewSessionCommand(cli *CLI, ctx context.Context) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "session",
+		Short: "Start an interactive session",
+		Long:  `Start an interactive CLIA session for continuous command assistance.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInteractiveSession(cli, ctx)
+		},
+	}
+
+	return cmd
+}
+
+// runInteractiveSession runs the interactive session
+func runInteractiveSession(cli *CLI, ctx context.Context) error {
+	// Welcome message
+	color.HiCyan("Welcome to CLIA Interactive Session")
+	color.HiBlack("Type 'help' for commands, 'exit' to quit")
+	fmt.Println()
+
+	reader := bufio.NewReader(os.Stdin)
+	
+	for {
+		// Show prompt
+		prompt := fmt.Sprintf("CLIA [%s] %s> ", 
+			color.CyanString(cli.Config.ActiveProvider),
+			color.HiBlackString(getCurrentDir()))
+		fmt.Print(prompt)
+		
+		// Read input
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			if err.Error() == "EOF" {
+				// Ctrl+D pressed
+				fmt.Println("\nGoodbye!")
+				return nil
+			}
+			return err
+		}
+		
+		input = strings.TrimSpace(input)
+		
+		// Handle special commands
+		switch input {
+		case "":
+			continue
+		case "exit", "quit", "q":
+			fmt.Println("Goodbye!")
+			return nil
+		case "help", "?":
+			showSessionHelp()
+			continue
+		case "clear", "cls":
+			clearScreen()
+			continue
+		case "provider":
+			fmt.Printf("Active provider: %s\n", cli.Config.ActiveProvider)
+			continue
+		}
+		
+		// Handle direct execution (commands starting with !)
+		if strings.HasPrefix(input, "!") {
+			command := strings.TrimPrefix(input, "!")
+			
+			// Check if this is an interactive command
+			if executor.IsInteractiveCommand(command) {
+				// Use interactive executor if available
+				if extExec, ok := cli.Executor.(executor.ExtendedExecutor); ok {
+					cli.Output.Info("Starting interactive session: " + command)
+					if err := extExec.ExecuteInteractive(command); err != nil {
+						cli.Output.Error("Execution failed: " + err.Error())
+					}
+					saveToHistory(command)
+					continue
+				}
+			}
+			
+			cli.Output.Info("Executing: " + command)
+			result, err := cli.Executor.Execute(command)
+			if err != nil {
+				cli.Output.Error("Execution failed: " + err.Error())
+				continue
+			}
+			
+			cli.Output.ShowExecutionResult(result)
+			saveToHistory(command)
+			continue
+		}
+		
+		// Process as natural language query
+		suggestion, err := cli.Agent.ProcessQuery(ctx, input)
+		if err != nil {
+			cli.Output.Error("Failed to process query: " + err.Error())
+			continue
+		}
+		
+		// Display suggestion
+		cli.Output.ShowCommandSuggestion(suggestion)
+		
+		// Show risks if any
+		if len(suggestion.Risks) > 0 {
+			cli.Output.ShowRisks(suggestion.Risks)
+		}
+		
+		// Confirm execution
+		confirmed, err := cli.Output.ConfirmExecution(suggestion.Command)
+		if err != nil {
+			cli.Output.Error("Failed to read confirmation: " + err.Error())
+			continue
+		}
+		
+		if !confirmed {
+			cli.Output.Info("Command cancelled")
+			continue
+		}
+		
+		// Execute command
+		// Check if this is an interactive command
+		if executor.IsInteractiveCommand(suggestion.Command) {
+			// Use interactive executor if available
+			if extExec, ok := cli.Executor.(executor.ExtendedExecutor); ok {
+				cli.Output.Info("Starting interactive session: " + suggestion.Command)
+				if err := extExec.ExecuteInteractive(suggestion.Command); err != nil {
+					cli.Output.Error("Execution failed: " + err.Error())
+				} else {
+					// For interactive commands, we can't capture output, so add a placeholder
+					cli.Agent.AddExecutionResult(suggestion.Command, "[Interactive session completed]", 0)
+				}
+				saveToHistory(suggestion.Command)
+				continue
+			}
+		}
+		
+		cli.Output.Info("Executing: " + suggestion.Command)
+		result, err := cli.Executor.Execute(suggestion.Command)
+		if err != nil {
+			cli.Output.Error("Execution failed: " + err.Error())
+			continue
+		}
+		
+		// Display result
+		cli.Output.ShowExecutionResult(result)
+		
+		// Update agent context
+		cli.Agent.AddExecutionResult(suggestion.Command, result.Output, result.ExitCode)
+		
+		// Save to history
+		saveToHistory(suggestion.Command)
+	}
+}
+
+// showSessionHelp displays help for the interactive session
+func showSessionHelp() {
+	fmt.Println()
+	color.HiCyan("Interactive Session Commands:")
+	fmt.Println()
+	fmt.Println("  help, ?        Show this help")
+	fmt.Println("  exit, quit, q  Exit the session")
+	fmt.Println("  clear, cls     Clear the screen")
+	fmt.Println("  provider       Show active provider")
+	fmt.Println("  !<command>     Execute command directly (bypass AI)")
+	fmt.Println()
+	fmt.Println("  Ctrl+C         Cancel current input")
+	fmt.Println("  Ctrl+D         Exit the session")
+	fmt.Println()
+}
+
+// clearScreen clears the terminal screen
+func clearScreen() {
+	// ANSI escape code to clear screen
+	fmt.Print("\033[2J\033[H")
+}
+
+// getCurrentDir returns the current directory name
+func getCurrentDir() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "?"
+	}
+	return filepath.Base(dir)
+}

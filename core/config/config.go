@@ -100,6 +100,28 @@ func (c *Config) Save() error {
 	return nil
 }
 
+// SaveToFile saves the configuration to a specific file
+func SaveToFile(c *Config, filename string) error {
+	// Ensure directory exists
+	dir := filepath.Dir(filename)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Marshal to YAML
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write to file with secure permissions
+	if err := os.WriteFile(filename, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
 // GetProvider returns the configuration for a specific provider
 func (c *Config) GetProvider(name string) (*ProviderConfig, error) {
 	if name == "" {
