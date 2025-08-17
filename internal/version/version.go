@@ -5,13 +5,13 @@ import "runtime"
 var (
 	// Version will be set during build using -ldflags
 	Version = "dev"
-	
-	// GitCommit will be set during build using -ldflags  
+
+	// GitCommit will be set during build using -ldflags
 	GitCommit = "unknown"
-	
+
 	// BuildTime will be set during build using -ldflags
 	BuildTime = "unknown"
-	
+
 	// GoVersion contains the current Go version
 	GoVersion = runtime.Version()
 )

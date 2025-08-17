@@ -28,17 +28,17 @@ GO_MOD_TIDY = go mod tidy
 build: clean tidy
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME) cmd/clia/main.go
+	$(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/clia
 	@echo "Binary built: $(BUILD_DIR)/$(BINARY_NAME)"
 
 ## build-all: Build for all platforms
 build-all: clean tidy
 	@echo "Building for all platforms..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 cmd/clia/main.go
-	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 cmd/clia/main.go
-	GOOS=darwin GOARCH=arm64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 cmd/clia/main.go
-	GOOS=windows GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe cmd/clia/main.go
+	GOOS=linux GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/clia
+	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/clia
+	GOOS=darwin GOARCH=arm64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/clia
+	GOOS=windows GOARCH=amd64 $(GO_BUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/clia
 	@echo "Cross-platform binaries built in $(BUILD_DIR)/"
 
 ## test: Run tests
@@ -94,7 +94,7 @@ run: build
 ## install: Install the binary to $GOPATH/bin
 install: tidy
 	@echo "Installing $(BINARY_NAME) to $$GOPATH/bin..."
-	go install -ldflags "$(LDFLAGS)" cmd/clia/main.go
+	go install -ldflags "$(LDFLAGS)" ./cmd/clia
 
 ## dev: Run in development mode with live reload
 dev:

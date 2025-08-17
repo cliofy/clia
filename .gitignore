@@ -5,6 +5,10 @@
 *.so
 *.dylib
 
+bubbletea-example/
+
+/clia
+
 # Test binary, built with `go test -c`
 *.test
 

@@ -19,7 +19,7 @@ func GetHomeDir() (string, error) {
 // GetConfigDir returns the configuration directory for the application
 func GetConfigDir() (string, error) {
 	var configDir string
-	
+
 	switch runtime.GOOS {
 	case "windows":
 		configDir = os.Getenv("APPDATA")
@@ -46,14 +46,14 @@ func GetConfigDir() (string, error) {
 			configDir = filepath.Join(home, ".config")
 		}
 	}
-	
+
 	cliaConfigDir := filepath.Join(configDir, "clia")
-	
+
 	// Create the directory if it doesn't exist
 	if err := os.MkdirAll(cliaConfigDir, 0755); err != nil {
 		return "", err
 	}
-	
+
 	return cliaConfigDir, nil
 }
 
@@ -68,7 +68,7 @@ func SanitizeAPIKey(key string) string {
 // IsCommandSafe checks if a command is considered safe to execute
 func IsCommandSafe(command string) bool {
 	command = strings.TrimSpace(strings.ToLower(command))
-	
+
 	// List of safe commands that don't modify the system
 	safeCommands := []string{
 		"ls", "ll", "la", "dir",
@@ -85,20 +85,20 @@ func IsCommandSafe(command string) bool {
 		"uname", "hostname",
 		"uptime", "w", "who",
 	}
-	
+
 	for _, safe := range safeCommands {
 		if strings.HasPrefix(command, safe+" ") || command == safe {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // IsDangerousCommand checks if a command is potentially dangerous
 func IsDangerousCommand(command string) bool {
 	command = strings.TrimSpace(strings.ToLower(command))
-	
+
 	dangerousPatterns := []string{
 		"rm -rf /",
 		"rm -rf *",
@@ -117,12 +117,12 @@ func IsDangerousCommand(command string) bool {
 		"halt",
 		"poweroff",
 	}
-	
+
 	for _, dangerous := range dangerousPatterns {
 		if strings.Contains(command, dangerous) {
 			return true
 		}
 	}
-	
+
 	return false
 }
