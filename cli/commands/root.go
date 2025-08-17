@@ -288,16 +288,30 @@ func runQuery(cli *CLI, ctx context.Context, args []string) error {
 	}
 
 	// Execute command
-	// Check if this is an interactive command
-	if executor.IsInteractiveCommand(suggestion.Command) {
+	// Check if this is an interactive command using intelligent detection
+	decision := executor.IsInteractiveCommandWithConfig(suggestion.Command, cli.Config)
+	
+	if decision.IsInteractive {
 		// Use interactive executor if available
 		if extExec, ok := cli.Executor.(executor.ExtendedExecutor); ok {
+			if verbose {
+				cli.Output.Info(fmt.Sprintf("Interactive detection: %s (confidence: %.2f, method: %s)", 
+					decision.Reason, decision.Confidence, decision.Method))
+			}
 			cli.Output.Info("Starting interactive session: " + suggestion.Command)
 			if err := extExec.ExecuteInteractive(suggestion.Command); err != nil {
 				return fmt.Errorf("execution failed: %w", err)
 			}
 			// For interactive commands, we can't capture output, so add a placeholder
 			cli.Agent.AddExecutionResult(suggestion.Command, "[Interactive session completed]", 0)
+			
+			// Learn from this execution if confidence is low
+			if decision.Confidence < 0.8 {
+				if learningErr := executor.LearnInteractiveCommand(suggestion.Command, true); learningErr != nil && verbose {
+					cli.Output.Warning("Failed to save learning: " + learningErr.Error())
+				}
+			}
+			
 			saveToHistory(suggestion.Command)
 			return nil
 		}

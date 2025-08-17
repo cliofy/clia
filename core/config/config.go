@@ -4,15 +4,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Config represents the application configuration
 type Config struct {
-	ActiveProvider string                    `yaml:"active_provider"`
-	Providers      map[string]ProviderConfig `yaml:"providers"`
-	configPath     string                    // Path to config file
+	ActiveProvider       string                    `yaml:"active_provider"`
+	Providers            map[string]ProviderConfig `yaml:"providers"`
+	InteractiveCommands  InteractiveConfig         `yaml:"interactive_commands,omitempty"`
+	configPath           string                    // Path to config file
+}
+
+// InteractiveConfig represents interactive command configuration
+type InteractiveConfig struct {
+	Always   []string `yaml:"always,omitempty"`   // Commands that are always interactive
+	Never    []string `yaml:"never,omitempty"`    // Commands that are never interactive
+	Patterns []string `yaml:"patterns,omitempty"` // Patterns to match interactive commands
 }
 
 // ProviderConfig represents a provider configuration
@@ -225,6 +234,21 @@ func DefaultConfig() *Config {
 				},
 			},
 		},
+		InteractiveCommands: InteractiveConfig{
+			Always: []string{
+				"zellij", "wezterm", "alacritty", "kitty",
+				"k9s", "lazydocker", "btm", "bpytop",
+				"ncspot", "cmus", "newsboat",
+			},
+			Never: []string{
+				"ls", "grep", "find", "cat", "echo",
+				"curl", "wget", "git", "make",
+			},
+			Patterns: []string{
+				"*-tui", "*-repl", "*-cli", 
+				"*-interactive", "*repl*",
+			},
+		},
 	}
 }
 
@@ -313,4 +337,64 @@ func MergeConfig(base, override map[string]interface{}) map[string]interface{} {
 	}
 	
 	return result
+}
+
+// IsInteractiveCommand checks if a command should be interactive based on config
+func (c *Config) IsInteractiveCommand(cmd string) (bool, bool) {
+	if c == nil {
+		return false, false
+	}
+
+	cmdBase := strings.Fields(cmd)[0]
+	if cmdBase == "" {
+		return false, false
+	}
+
+	// Check "never" list first (highest priority)
+	for _, never := range c.InteractiveCommands.Never {
+		if cmdBase == never {
+			return false, true // definitive answer
+		}
+	}
+
+	// Check "always" list
+	for _, always := range c.InteractiveCommands.Always {
+		if cmdBase == always {
+			return true, true // definitive answer
+		}
+	}
+
+	// Check patterns
+	for _, pattern := range c.InteractiveCommands.Patterns {
+		if matchesPattern(cmdBase, pattern) {
+			return true, true // definitive answer
+		}
+	}
+
+	return false, false // no definitive answer
+}
+
+// matchesPattern implements simple glob-like pattern matching
+func matchesPattern(str, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+
+	// Handle patterns with * at the beginning or end
+	if strings.HasPrefix(pattern, "*") && strings.HasSuffix(pattern, "*") {
+		// Pattern like "*tui*"
+		middle := pattern[1 : len(pattern)-1]
+		return strings.Contains(str, middle)
+	} else if strings.HasPrefix(pattern, "*") {
+		// Pattern like "*tui"
+		suffix := pattern[1:]
+		return strings.HasSuffix(str, suffix)
+	} else if strings.HasSuffix(pattern, "*") {
+		// Pattern like "my*"
+		prefix := pattern[:len(pattern)-1]
+		return strings.HasPrefix(str, prefix)
+	}
+
+	// Exact match
+	return str == pattern
 }

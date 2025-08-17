@@ -13,6 +13,14 @@ import (
 	"golang.org/x/term"
 )
 
+// InteractiveDecision represents the result of interactive command detection
+type InteractiveDecision struct {
+	IsInteractive bool
+	Confidence    float64 // 0.0 to 1.0
+	Reason        string
+	Method        string // "config", "hardcoded", "learned", "probe"
+}
+
 // InteractiveExecutor handles interactive/TUI commands
 type InteractiveExecutor interface {
 	// ExecuteInteractive runs an interactive command with full terminal control
@@ -124,6 +132,66 @@ func NewExtendedExecutor() ExtendedExecutor {
 
 // IsInteractiveCommand checks if a command requires interactive mode
 func IsInteractiveCommand(cmd string) bool {
+	result := IsInteractiveCommandWithConfig(cmd, nil)
+	return result.IsInteractive
+}
+
+// IsInteractiveCommandWithConfig checks if a command requires interactive mode using config
+func IsInteractiveCommandWithConfig(cmd string, cfg interface{}) *InteractiveDecision {
+	// Priority order for detection:
+	// 1. User config (always/never lists and patterns)
+	// 2. Learned commands
+	// 3. Hardcoded known commands
+	// 4. Dynamic probing
+
+	// 1. Check user configuration first
+	if config, ok := cfg.(interface{ IsInteractiveCommand(string) (bool, bool) }); ok {
+		if isInteractive, hasAnswer := config.IsInteractiveCommand(cmd); hasAnswer {
+			return &InteractiveDecision{
+				IsInteractive: isInteractive,
+				Confidence:    1.0,
+				Reason:        "defined in user configuration",
+				Method:        "config",
+			}
+		}
+	}
+
+	// 2. Check learned commands
+	if result := CheckLearnedCommands(cmd); result != nil {
+		return &InteractiveDecision{
+			IsInteractive: result.IsInteractive,
+			Confidence:    result.Confidence,
+			Reason:        result.Reason,
+			Method:        "learned",
+		}
+	}
+
+	// 3. Check hardcoded known commands
+	if result := checkHardcodedCommands(cmd); result != nil {
+		return result
+	}
+
+	// 4. Try dynamic probing as last resort
+	if result, err := ProbeInteractive(cmd); err == nil && result.Confidence > 0.6 {
+		return &InteractiveDecision{
+			IsInteractive: result.IsInteractive,
+			Confidence:    result.Confidence,
+			Reason:        result.Reason,
+			Method:        "probe",
+		}
+	}
+
+	// Default: assume non-interactive
+	return &InteractiveDecision{
+		IsInteractive: false,
+		Confidence:    0.5,
+		Reason:        "no interactive indicators found",
+		Method:        "default",
+	}
+}
+
+// checkHardcodedCommands checks against the built-in list of known commands
+func checkHardcodedCommands(cmd string) *InteractiveDecision {
 	// List of known interactive commands that always need PTY
 	interactiveCommands := []string{
 		"top", "htop", "btop", "less", "vim", "vi", "nano", "emacs",
@@ -142,32 +210,57 @@ func IsInteractiveCommand(cmd string) bool {
 	// Check if the command is an exact match for REPL commands
 	for _, repl := range replCommands {
 		if cmd == repl {
-			return true
+			return &InteractiveDecision{
+				IsInteractive: true,
+				Confidence:    0.95,
+				Reason:        fmt.Sprintf("REPL command: %s", repl),
+				Method:        "hardcoded",
+			}
 		}
 	}
 
 	// Check if the command starts with any interactive command
 	for _, ic := range interactiveCommands {
 		if cmd == ic {
-			return true
+			return &InteractiveDecision{
+				IsInteractive: true,
+				Confidence:    0.95,
+				Reason:        fmt.Sprintf("known interactive command: %s", ic),
+				Method:        "hardcoded",
+			}
 		}
 		// Check if command starts with the interactive command
 		if len(cmd) > len(ic) && cmd[:len(ic)] == ic && (cmd[len(ic)] == ' ' || cmd[len(ic)] == '\t') {
-			return true
+			return &InteractiveDecision{
+				IsInteractive: true,
+				Confidence:    0.9,
+				Reason:        fmt.Sprintf("starts with interactive command: %s", ic),
+				Method:        "hardcoded",
+			}
 		}
 	}
 
 	// Check for docker exec with -it flag
 	if contains(cmd, "docker exec") && (contains(cmd, " -it ") || contains(cmd, " -ti ")) {
-		return true
+		return &InteractiveDecision{
+			IsInteractive: true,
+			Confidence:    0.95,
+			Reason:        "docker exec with -it flag",
+			Method:        "hardcoded",
+		}
 	}
 
 	// Check for common interactive flags in other commands
 	if contains(cmd, " -it ") || (contains(cmd, " -i ") && contains(cmd, " -t ")) {
-		return true
+		return &InteractiveDecision{
+			IsInteractive: true,
+			Confidence:    0.85,
+			Reason:        "command with interactive flags",
+			Method:        "hardcoded",
+		}
 	}
 
-	return false
+	return nil
 }
 
 func contains(s, substr string) bool {

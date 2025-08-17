@@ -78,13 +78,26 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 		if strings.HasPrefix(input, "!") {
 			command := strings.TrimPrefix(input, "!")
 			
-			// Check if this is an interactive command
-			if executor.IsInteractiveCommand(command) {
+			// Use intelligent detection with config
+			decision := executor.IsInteractiveCommandWithConfig(command, cli.Config)
+			
+			if decision.IsInteractive {
 				// Use interactive executor if available
 				if extExec, ok := cli.Executor.(executor.ExtendedExecutor); ok {
+					if verbose {
+						cli.Output.Info(fmt.Sprintf("Interactive detection: %s (confidence: %.2f, method: %s)", 
+							decision.Reason, decision.Confidence, decision.Method))
+					}
 					cli.Output.Info("Starting interactive session: " + command)
 					if err := extExec.ExecuteInteractive(command); err != nil {
 						cli.Output.Error("Execution failed: " + err.Error())
+					} else {
+						// Learn from this execution if confidence is low
+						if decision.Confidence < 0.8 {
+							if learningErr := executor.LearnInteractiveCommand(command, true); learningErr != nil && verbose {
+								cli.Output.Warning("Failed to save learning: " + learningErr.Error())
+							}
+						}
 					}
 					saveToHistory(command)
 					continue
@@ -99,6 +112,14 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 			}
 			
 			cli.Output.ShowExecutionResult(result)
+			
+			// Learn from this execution if detection was uncertain
+			if decision.Confidence < 0.8 {
+				if learningErr := executor.LearnInteractiveCommand(command, false); learningErr != nil && verbose {
+					cli.Output.Warning("Failed to save learning: " + learningErr.Error())
+				}
+			}
+			
 			saveToHistory(command)
 			continue
 		}
@@ -131,16 +152,29 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 		}
 		
 		// Execute command
-		// Check if this is an interactive command
-		if executor.IsInteractiveCommand(suggestion.Command) {
+		// Use intelligent detection with config
+		decision := executor.IsInteractiveCommandWithConfig(suggestion.Command, cli.Config)
+		
+		if decision.IsInteractive {
 			// Use interactive executor if available
 			if extExec, ok := cli.Executor.(executor.ExtendedExecutor); ok {
+				if verbose {
+					cli.Output.Info(fmt.Sprintf("Interactive detection: %s (confidence: %.2f, method: %s)", 
+						decision.Reason, decision.Confidence, decision.Method))
+				}
 				cli.Output.Info("Starting interactive session: " + suggestion.Command)
 				if err := extExec.ExecuteInteractive(suggestion.Command); err != nil {
 					cli.Output.Error("Execution failed: " + err.Error())
 				} else {
 					// For interactive commands, we can't capture output, so add a placeholder
 					cli.Agent.AddExecutionResult(suggestion.Command, "[Interactive session completed]", 0)
+					
+					// Learn from this execution if confidence is low
+					if decision.Confidence < 0.8 {
+						if learningErr := executor.LearnInteractiveCommand(suggestion.Command, true); learningErr != nil && verbose {
+							cli.Output.Warning("Failed to save learning: " + learningErr.Error())
+						}
+					}
 				}
 				saveToHistory(suggestion.Command)
 				continue
@@ -159,6 +193,13 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 		
 		// Update agent context
 		cli.Agent.AddExecutionResult(suggestion.Command, result.Output, result.ExitCode)
+		
+		// Learn from this execution if detection was uncertain
+		if decision.Confidence < 0.8 {
+			if learningErr := executor.LearnInteractiveCommand(suggestion.Command, false); learningErr != nil && verbose {
+				cli.Output.Warning("Failed to save learning: " + learningErr.Error())
+			}
+		}
 		
 		// Save to history
 		saveToHistory(suggestion.Command)
