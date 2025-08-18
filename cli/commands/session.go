@@ -89,9 +89,23 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 							decision.Reason, decision.Confidence, decision.Method))
 					}
 					cli.Output.Info("Starting interactive session: " + command)
-					if err := extExec.ExecuteInteractive(command); err != nil {
+					
+					// Check if we should capture the last frame
+					shouldCapture := cli.Config.ShouldCaptureLastFrame()
+					
+					// Execute with optional capture
+					lastFrame, err := extExec.ExecuteInteractiveWithCapture(command, shouldCapture)
+					if err != nil {
 						cli.Output.Error("Execution failed: " + err.Error())
 					} else {
+						// Display captured frame if available
+						if lastFrame != "" {
+							fmt.Println("\n" + strings.Repeat("=", 60))
+							fmt.Println("Last Frame Captured:")
+							fmt.Println(strings.Repeat("=", 60))
+							fmt.Println(lastFrame)
+							fmt.Println(strings.Repeat("=", 60))
+						}
 						// Learn from this execution if confidence is low
 						if decision.Confidence < 0.8 {
 							if learningErr := executor.LearnInteractiveCommand(command, true); learningErr != nil && verbose {
@@ -163,9 +177,24 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 						decision.Reason, decision.Confidence, decision.Method))
 				}
 				cli.Output.Info("Starting interactive session: " + suggestion.Command)
-				if err := extExec.ExecuteInteractive(suggestion.Command); err != nil {
+				
+				// Check if we should capture the last frame
+				shouldCapture := cli.Config.ShouldCaptureLastFrame()
+				
+				// Execute with optional capture
+				lastFrame, err := extExec.ExecuteInteractiveWithCapture(suggestion.Command, shouldCapture)
+				if err != nil {
 					cli.Output.Error("Execution failed: " + err.Error())
 				} else {
+					// Display captured frame if available
+					if lastFrame != "" {
+						fmt.Println("\n" + strings.Repeat("=", 60))
+						fmt.Println("Last Frame Captured:")
+						fmt.Println(strings.Repeat("=", 60))
+						fmt.Println(lastFrame)
+						fmt.Println(strings.Repeat("=", 60))
+					}
+					
 					// For interactive commands, we can't capture output, so add a placeholder
 					cli.Agent.AddExecutionResult(suggestion.Command, "[Interactive session completed]", 0)
 					

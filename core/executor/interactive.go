@@ -26,6 +26,8 @@ type InteractiveDecision struct {
 type InteractiveExecutor interface {
 	// ExecuteInteractive runs an interactive command with full terminal control
 	ExecuteInteractive(cmd string) error
+	// ExecuteInteractiveWithCapture runs an interactive command and optionally captures the last frame
+	ExecuteInteractiveWithCapture(cmd string, captureLastFrame bool) (string, error)
 }
 
 // interactiveExecutor implements InteractiveExecutor
@@ -105,6 +107,110 @@ func (e *interactiveExecutor) ExecuteInteractive(cmd string) error {
 	case <-ctx.Done():
 		return nil
 	}
+}
+
+// ExecuteInteractiveWithCapture runs a command with full PTY pass-through and optional screen capture
+func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureLastFrame bool) (string, error) {
+	// Create command
+	command := exec.Command(e.shell, "-c", cmd)
+
+	// Start the command with a PTY
+	ptmx, err := pty.Start(command)
+	if err != nil {
+		return "", fmt.Errorf("failed to start PTY: %w", err)
+	}
+	defer func() { _ = ptmx.Close() }()
+
+	// Handle PTY size changes
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGWINCH)
+	go func() {
+		for range ch {
+			if err := pty.InheritSize(os.Stdin, ptmx); err != nil {
+				// Log error but continue
+				_ = err
+			}
+		}
+	}()
+	ch <- syscall.SIGWINCH // Initial resize
+	defer func() { signal.Stop(ch); close(ch) }()
+
+	// Set stdin to raw mode
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return "", fmt.Errorf("failed to set raw mode: %w", err)
+	}
+	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
+
+	// Create a context for cleanup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initialize screen capture if requested
+	var screen *TerminalScreen
+	var lastFrame string
+	
+	if captureLastFrame {
+		// Get terminal size
+		cols, rows, err := term.GetSize(int(os.Stdout.Fd()))
+		if err != nil {
+			// Fallback to default size
+			cols, rows = 80, 24
+		}
+		screen = NewTerminalScreen(cols, rows)
+	}
+
+	// Copy stdin to PTY
+	go func() {
+		_, _ = io.Copy(ptmx, os.Stdin)
+		cancel()
+	}()
+
+	// Copy PTY to stdout with optional screen capture
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := ptmx.Read(buf)
+			if err != nil {
+				break
+			}
+			
+			// Write to stdout
+			_, _ = os.Stdout.Write(buf[:n])
+			
+			// Update virtual screen if capturing
+			if screen != nil {
+				screen.ProcessOutput(buf[:n])
+				
+				// Check if we just exited alternate screen
+				if screen.DetectedAltScreenExit() {
+					lastFrame = screen.GetLastFrame()
+				}
+			}
+		}
+		cancel()
+	}()
+
+	// Wait for the command to complete or context to be done
+	done := make(chan error, 1)
+	go func() {
+		done <- command.Wait()
+	}()
+
+	var cmdErr error
+	select {
+	case cmdErr = <-done:
+		// Command completed
+	case <-ctx.Done():
+		// Context cancelled
+	}
+
+	// Capture final frame if we haven't captured one yet and capturing is enabled
+	if captureLastFrame && lastFrame == "" && screen != nil {
+		lastFrame = screen.CaptureFrame()
+	}
+
+	return lastFrame, cmdErr
 }
 
 // ExtendedExecutor combines both regular and interactive execution

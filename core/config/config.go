@@ -19,9 +19,10 @@ type Config struct {
 
 // InteractiveConfig represents interactive command configuration
 type InteractiveConfig struct {
-	Always   []string `yaml:"always,omitempty"`   // Commands that are always interactive
-	Never    []string `yaml:"never,omitempty"`    // Commands that are never interactive
-	Patterns []string `yaml:"patterns,omitempty"` // Patterns to match interactive commands
+	Always          []string `yaml:"always,omitempty"`           // Commands that are always interactive
+	Never           []string `yaml:"never,omitempty"`            // Commands that are never interactive
+	Patterns        []string `yaml:"patterns,omitempty"`         // Patterns to match interactive commands
+	CaptureLastFrame bool     `yaml:"capture_last_frame,omitempty"` // Capture last frame of TUI programs
 }
 
 // ProviderConfig represents a provider configuration
@@ -190,6 +191,11 @@ func (c *Config) ListProviders() []string {
 		providers = append(providers, name)
 	}
 	return providers
+}
+
+// ShouldCaptureLastFrame returns whether to capture the last frame of TUI programs
+func (c *Config) ShouldCaptureLastFrame() bool {
+	return c.InteractiveCommands.CaptureLastFrame
 }
 
 // expandEnvVars expands environment variables in config values

@@ -11,7 +11,7 @@ import (
 
 // NewExecCommand creates the exec command
 func NewExecCommand(cli *CLI, ctx context.Context) *cobra.Command {
-	var forceInteractive, forceNonInteractive bool
+	var forceInteractive, forceNonInteractive, captureLastFrame bool
 	
 	cmd := &cobra.Command{
 		Use:   "exec [command]",
@@ -62,7 +62,25 @@ func NewExecCommand(cli *CLI, ctx context.Context) *cobra.Command {
 			if shouldUseInteractive {
 				if extExec, ok := cli.Executor.(executor.ExtendedExecutor); ok {
 					cli.Output.Info("Starting interactive session: " + command)
-					err := extExec.ExecuteInteractive(command)
+					
+					// Check if we should capture the last frame
+					shouldCapture := captureLastFrame
+					if !shouldCapture {
+						// Check config for global capture setting
+						shouldCapture = cli.Config.ShouldCaptureLastFrame()
+					}
+					
+					// Execute with optional capture
+					lastFrame, err := extExec.ExecuteInteractiveWithCapture(command, shouldCapture)
+					
+					// Display captured frame if available
+					if lastFrame != "" {
+						fmt.Println("\n" + strings.Repeat("=", 60))
+						fmt.Println("Last Frame Captured:")
+						fmt.Println(strings.Repeat("=", 60))
+						fmt.Println(lastFrame)
+						fmt.Println(strings.Repeat("=", 60))
+					}
 					
 					// Learn from this execution if confidence is low
 					if decision.Confidence < 0.8 && err == nil {
@@ -110,6 +128,7 @@ func NewExecCommand(cli *CLI, ctx context.Context) *cobra.Command {
 	// Add command-specific flags
 	cmd.Flags().BoolVar(&forceInteractive, "interactive", false, "force interactive mode")
 	cmd.Flags().BoolVar(&forceNonInteractive, "no-interactive", false, "force non-interactive mode")
+	cmd.Flags().BoolVar(&captureLastFrame, "capture-frame", false, "capture and display the last frame of TUI programs")
 
 	return cmd
 }

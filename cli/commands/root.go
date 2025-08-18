@@ -318,9 +318,25 @@ func runQuery(cli *CLI, ctx context.Context, args []string) error {
 					decision.Reason, decision.Confidence, decision.Method))
 			}
 			cli.Output.Info("Starting interactive session: " + suggestion.Command)
-			if err := extExec.ExecuteInteractive(suggestion.Command); err != nil {
+			
+			// Check if we should capture the last frame
+			shouldCapture := cli.Config.ShouldCaptureLastFrame()
+			
+			// Execute with optional capture
+			lastFrame, err := extExec.ExecuteInteractiveWithCapture(suggestion.Command, shouldCapture)
+			if err != nil {
 				return fmt.Errorf("execution failed: %w", err)
 			}
+			
+			// Display captured frame if available
+			if lastFrame != "" {
+				fmt.Println("\n" + strings.Repeat("=", 60))
+				fmt.Println("Last Frame Captured:")
+				fmt.Println(strings.Repeat("=", 60))
+				fmt.Println(lastFrame)
+				fmt.Println(strings.Repeat("=", 60))
+			}
+			
 			// For interactive commands, we can't capture output, so add a placeholder
 			cli.Agent.AddExecutionResult(suggestion.Command, "[Interactive session completed]", 0)
 			
