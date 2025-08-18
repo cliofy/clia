@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/creack/pty"
@@ -171,8 +172,8 @@ func IsInteractiveCommandWithConfig(cmd string, cfg interface{}) *InteractiveDec
 		return result
 	}
 
-	// 4. Try dynamic probing as last resort
-	if result, err := ProbeInteractive(cmd); err == nil && result.Confidence > 0.6 {
+	// 4. Try dynamic probing as last resort with high confidence threshold
+	if result, err := ProbeInteractive(cmd); err == nil && result.Confidence > 0.85 {
 		return &InteractiveDecision{
 			IsInteractive: result.IsInteractive,
 			Confidence:    result.Confidence,
@@ -207,14 +208,18 @@ func checkHardcodedCommands(cmd string) *InteractiveDecision {
 		"php", "r", "julia", "scala", "clojure",
 	}
 
-	// Check if the command is an exact match for REPL commands
-	for _, repl := range replCommands {
-		if cmd == repl {
-			return &InteractiveDecision{
-				IsInteractive: true,
-				Confidence:    0.95,
-				Reason:        fmt.Sprintf("REPL command: %s", repl),
-				Method:        "hardcoded",
+	// Check if the command is an exact match for REPL commands (no arguments)
+	cmdFields := strings.Fields(cmd)
+	if len(cmdFields) == 1 {
+		cmdBase := cmdFields[0]
+		for _, repl := range replCommands {
+			if cmdBase == repl {
+				return &InteractiveDecision{
+					IsInteractive: true,
+					Confidence:    0.95,
+					Reason:        fmt.Sprintf("REPL command: %s", repl),
+					Method:        "hardcoded",
+				}
 			}
 		}
 	}

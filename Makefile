@@ -14,7 +14,7 @@ help:
 # Run tests
 test:
 	@echo "Running tests..."
-	@go test -v -cover ./...
+	@gotestsum --format testname
 
 # Run tests with verbose output
 test-verbose:

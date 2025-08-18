@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -221,9 +222,23 @@ func (cli *CLI) initComponents(ctx context.Context) error {
 // initTestComponents initializes mock components for testing
 func (cli *CLI) initTestComponents() {
 	// Use mock implementations for testing
-	// These would be created in the test package
 	cli.Config = config.DefaultConfig()
-	// Mock executor, agent, and provider would be set here
+	
+	// Initialize executor
+	cli.Executor = executor.NewExtendedExecutor()
+	
+	// Initialize output formatter
+	if cli.Output == nil {
+		cli.Output = output.NewFormatter(true, false)
+	}
+	
+	// Initialize provider manager
+	cli.ProviderManager = provider.NewManager(cli.Config)
+	
+	// For tests, we can use a nil agent
+	// The agent will be tested separately with proper mocks
+	// Real tests should inject appropriate mock agents when needed
+	cli.Agent = nil
 }
 
 // saveConfig saves the configuration to file
@@ -253,9 +268,13 @@ func getModelFromConfig(cfg *config.Config) string {
 
 // runQuery handles the default behavior of running a natural language query
 func runQuery(cli *CLI, ctx context.Context, args []string) error {
-	query := args[0]
+	query := strings.Join(args, " ")
 	
 	// Process query with agent
+	if cli.Agent == nil {
+		return fmt.Errorf("agent not initialized - cannot process query: %s", query)
+	}
+	
 	suggestion, err := cli.Agent.ProcessQuery(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to process query: %w", err)

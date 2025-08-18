@@ -86,11 +86,52 @@ func ProbeInteractive(cmd string) (*ProbeResult, error) {
 // quickProbeChecks performs fast heuristic checks without running the command
 func quickProbeChecks(cmd string) *ProbeResult {
 	cmdLower := strings.ToLower(cmd)
+	cmdFields := strings.Fields(cmd)
 	
-	// Check for terminal multiplexers and known TUI patterns
-	tuiPatterns := []string{
+	if len(cmdFields) == 0 {
+		return nil
+	}
+	
+	baseCmd := cmdFields[0]
+	
+	// Strong indicators that a command is NON-interactive
+	nonInteractiveCommands := []string{
+		"curl", "wget", "git", "make", "npm", "pip", "go", 
+		"echo", "cat", "grep", "find", "ls", "pwd", "date",
+		"mkdir", "cp", "mv", "rm", "chmod", "chown",
+		"docker", "node", "python3", "python",
+	}
+	
+	for _, cmd := range nonInteractiveCommands {
+		if baseCmd == cmd {
+			return &ProbeResult{
+				IsInteractive: false,
+				Confidence:    0.9,
+				Reason:        fmt.Sprintf("'%s' is typically non-interactive", cmd),
+			}
+		}
+	}
+	
+	// Check for terminal multiplexers and known TUI patterns in command names
+	tuiCommands := []string{
 		"zellij", "wezterm", "alacritty", "kitty", "iterm",
-		"-tui", "_tui", "-cli", "-repl", "-interactive",
+		"htop", "btop", "top", "vim", "nvim", "nano", "emacs",
+		"tmux", "screen", "less", "more",
+	}
+	
+	for _, tuiCmd := range tuiCommands {
+		if baseCmd == tuiCmd {
+			return &ProbeResult{
+				IsInteractive: true,
+				Confidence:    0.95,
+				Reason:        fmt.Sprintf("'%s' is a known TUI command", tuiCmd),
+			}
+		}
+	}
+	
+	// Check for TUI patterns in flags/args
+	tuiPatterns := []string{
+		"-tui", "_tui", "-repl", "-interactive",
 		"--interactive", "--tty",
 	}
 	
@@ -98,7 +139,7 @@ func quickProbeChecks(cmd string) *ProbeResult {
 		if strings.Contains(cmdLower, pattern) {
 			return &ProbeResult{
 				IsInteractive: true,
-				Confidence:    0.9,
+				Confidence:    0.8,
 				Reason:        fmt.Sprintf("contains TUI pattern: %s", pattern),
 			}
 		}
@@ -286,17 +327,47 @@ func CheckLearnedCommands(cmd string) *ProbeResult {
 		return nil
 	}
 
-	cmdBase := strings.Fields(cmd)[0] // Just the command name
+	cmdFields := strings.Fields(cmd)
+	if len(cmdFields) == 0 {
+		return nil
+	}
+	
+	cmdBase := cmdFields[0] // Just the command name
 	lines := strings.Split(string(data), "\n")
 	
+	// First, try to find exact command match (including arguments)
 	for _, line := range lines {
 		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 2 && parts[0] == cmdBase {
+		if len(parts) == 2 && parts[0] == cmd {
 			isInteractive := parts[1] == "true"
 			return &ProbeResult{
 				IsInteractive: isInteractive,
 				Confidence:    1.0,
-				Reason:        "learned from previous usage",
+				Reason:        "exact command learned from previous usage",
+			}
+		}
+	}
+	
+	// Then, try to find base command match with lower confidence
+	// Only if the learned command is specifically for the base command (not with args)
+	for _, line := range lines {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 && parts[0] == cmdBase {
+			// Only use base command learning if it was learned without arguments
+			// This prevents 'docker:true' from affecting 'docker ps'
+			if !strings.Contains(parts[0], " ") {
+				isInteractive := parts[1] == "true"
+				// Lower confidence for base command matches
+				confidence := 0.8
+				if len(cmdFields) > 1 {
+					// Even lower confidence when applying base command to command with args
+					confidence = 0.6
+				}
+				return &ProbeResult{
+					IsInteractive: isInteractive,
+					Confidence:    confidence,
+					Reason:        fmt.Sprintf("base command '%s' learned from previous usage", cmdBase),
+				}
 			}
 		}
 	}
