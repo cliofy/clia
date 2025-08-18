@@ -150,9 +150,9 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureL
 	defer cancel()
 
 	// Initialize screen capture if requested
-	var screen *TerminalScreen
+	var screen *AnsiTermScreen
 	var lastFrame string
-	
+
 	if captureLastFrame {
 		// Get terminal size
 		cols, rows, err := term.GetSize(int(os.Stdout.Fd()))
@@ -160,7 +160,7 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureL
 			// Fallback to default size
 			cols, rows = 80, 24
 		}
-		screen = NewTerminalScreen(cols, rows)
+		screen = NewAnsiTermScreen(cols, rows)
 	}
 
 	// Copy stdin to PTY
@@ -177,14 +177,14 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureL
 			if err != nil {
 				break
 			}
-			
+
 			// Write to stdout
 			_, _ = os.Stdout.Write(buf[:n])
-			
+
 			// Update virtual screen if capturing
 			if screen != nil {
 				screen.ProcessOutput(buf[:n])
-				
+
 				// Check if we just exited alternate screen
 				if screen.DetectedAltScreenExit() {
 					lastFrame = screen.GetLastFrame()
@@ -222,7 +222,7 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCaptureAndTimeout(cmd string
 	if timeout <= 0 {
 		return e.ExecuteInteractiveWithCapture(cmd, captureLastFrame)
 	}
-	
+
 	// For timeout mode, run in non-interactive capture mode
 	return e.executeWithTimeout(cmd, captureLastFrame, timeout)
 }
@@ -240,13 +240,27 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 	defer func() { _ = ptmx.Close() }()
 
 	// Initialize screen capture if requested
-	var screen *TerminalScreen
+	var screen *AnsiTermScreen
 	var lastFrame string
-	
+
 	if captureLastFrame {
-		// Get terminal size
-		cols, rows := 80, 24 // Default size for non-interactive mode
-		screen = NewTerminalScreen(cols, rows)
+		// Get actual terminal size
+		cols, rows, err := term.GetSize(int(os.Stdout.Fd()))
+		if err != nil {
+			// Fallback to default size
+			cols, rows = 80, 24
+		}
+
+		// Set PTY size to match our virtual screen
+		err = pty.Setsize(ptmx, &pty.Winsize{
+			Rows: uint16(rows),
+			Cols: uint16(cols),
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to set PTY size: %w", err)
+		}
+
+		screen = NewAnsiTermScreen(cols, rows)
 	}
 
 	// Create timeout timer
@@ -271,11 +285,11 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 				if err != nil {
 					return
 				}
-				
+
 				// Update virtual screen if capturing
 				if screen != nil {
 					screen.ProcessOutput(buf[:n])
-					
+
 					// Check if we just exited alternate screen
 					if screen.DetectedAltScreenExit() {
 						lastFrame = screen.GetLastFrame()
@@ -303,7 +317,7 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 				command.Process.Kill()
 			}
 		}
-		
+
 		// Wait a bit for graceful termination
 		select {
 		case cmdErr = <-done:
@@ -319,13 +333,20 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 
 	// Cancel context to stop output goroutine
 	cancel()
-	
+
 	// Wait for output goroutine to finish
 	<-outputDone
 
 	// Capture final frame if we haven't captured one yet and capturing is enabled
-	if captureLastFrame && lastFrame == "" && screen != nil {
-		lastFrame = screen.CaptureFrame()
+	if captureLastFrame && screen != nil {
+		if lastFrame == "" {
+			// Get the final frame - AnsiTermScreen handles this automatically
+			if altExitFrame := screen.GetLastFrame(); altExitFrame != "" {
+				lastFrame = altExitFrame
+			} else {
+				lastFrame = screen.CaptureFrame()
+			}
+		}
 	}
 
 	return lastFrame, cmdErr
@@ -335,29 +356,29 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 func (e *interactiveExecutor) sendQuitSignals(ptmx *os.File, cmd string) error {
 	// Determine the appropriate quit signal based on the command
 	quitSignals := e.getQuitSignalsForCommand(cmd)
-	
+
 	for _, signal := range quitSignals {
 		if _, err := ptmx.Write([]byte(signal)); err == nil {
 			// Wait a bit for the command to process the signal
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
-	
+
 	return nil
 }
 
 // getQuitSignalsForCommand returns appropriate quit signals for different commands
 func (e *interactiveExecutor) getQuitSignalsForCommand(cmd string) []string {
 	cmdLower := strings.ToLower(cmd)
-	
+
 	// Extract the base command
 	cmdFields := strings.Fields(cmd)
 	if len(cmdFields) == 0 {
 		return []string{"\x03"} // Ctrl+C as fallback
 	}
-	
+
 	baseCmd := strings.ToLower(cmdFields[0])
-	
+
 	switch baseCmd {
 	case "top", "htop", "btop":
 		return []string{"q", "\x03"} // 'q' then Ctrl+C
