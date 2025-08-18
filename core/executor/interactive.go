@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 	"golang.org/x/term"
@@ -28,6 +29,8 @@ type InteractiveExecutor interface {
 	ExecuteInteractive(cmd string) error
 	// ExecuteInteractiveWithCapture runs an interactive command and optionally captures the last frame
 	ExecuteInteractiveWithCapture(cmd string, captureLastFrame bool) (string, error)
+	// ExecuteInteractiveWithCaptureAndTimeout runs an interactive command with optional capture and timeout
+	ExecuteInteractiveWithCaptureAndTimeout(cmd string, captureLastFrame bool, timeout time.Duration) (string, error)
 }
 
 // interactiveExecutor implements InteractiveExecutor
@@ -211,6 +214,185 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureL
 	}
 
 	return lastFrame, cmdErr
+}
+
+// ExecuteInteractiveWithCaptureAndTimeout runs a command with optional timeout and screen capture
+func (e *interactiveExecutor) ExecuteInteractiveWithCaptureAndTimeout(cmd string, captureLastFrame bool, timeout time.Duration) (string, error) {
+	// If no timeout is specified, use the regular method
+	if timeout <= 0 {
+		return e.ExecuteInteractiveWithCapture(cmd, captureLastFrame)
+	}
+	
+	// For timeout mode, run in non-interactive capture mode
+	return e.executeWithTimeout(cmd, captureLastFrame, timeout)
+}
+
+// executeWithTimeout implements the timeout-based execution
+func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bool, timeout time.Duration) (string, error) {
+	// Create command
+	command := exec.Command(e.shell, "-c", cmd)
+
+	// Start the command with a PTY
+	ptmx, err := pty.Start(command)
+	if err != nil {
+		return "", fmt.Errorf("failed to start PTY: %w", err)
+	}
+	defer func() { _ = ptmx.Close() }()
+
+	// Initialize screen capture if requested
+	var screen *TerminalScreen
+	var lastFrame string
+	
+	if captureLastFrame {
+		// Get terminal size
+		cols, rows := 80, 24 // Default size for non-interactive mode
+		screen = NewTerminalScreen(cols, rows)
+	}
+
+	// Create timeout timer
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	// Create context for cleanup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Capture output
+	outputDone := make(chan struct{})
+	go func() {
+		defer close(outputDone)
+		buf := make([]byte, 4096)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				n, err := ptmx.Read(buf)
+				if err != nil {
+					return
+				}
+				
+				// Update virtual screen if capturing
+				if screen != nil {
+					screen.ProcessOutput(buf[:n])
+					
+					// Check if we just exited alternate screen
+					if screen.DetectedAltScreenExit() {
+						lastFrame = screen.GetLastFrame()
+					}
+				}
+			}
+		}
+	}()
+
+	// Wait for either timeout or command completion
+	done := make(chan error, 1)
+	go func() {
+		done <- command.Wait()
+	}()
+
+	var cmdErr error
+	select {
+	case cmdErr = <-done:
+		// Command completed before timeout
+	case <-timer.C:
+		// Timeout reached - send quit signals
+		if err := e.sendQuitSignals(ptmx, cmd); err != nil {
+			// If graceful quit fails, kill the process
+			if command.Process != nil {
+				command.Process.Kill()
+			}
+		}
+		
+		// Wait a bit for graceful termination
+		select {
+		case cmdErr = <-done:
+			// Command terminated gracefully
+		case <-time.After(1 * time.Second):
+			// Force kill if still running
+			if command.Process != nil {
+				command.Process.Kill()
+				cmdErr = fmt.Errorf("command terminated due to timeout")
+			}
+		}
+	}
+
+	// Cancel context to stop output goroutine
+	cancel()
+	
+	// Wait for output goroutine to finish
+	<-outputDone
+
+	// Capture final frame if we haven't captured one yet and capturing is enabled
+	if captureLastFrame && lastFrame == "" && screen != nil {
+		lastFrame = screen.CaptureFrame()
+	}
+
+	return lastFrame, cmdErr
+}
+
+// sendQuitSignals sends appropriate quit signals to terminate TUI programs
+func (e *interactiveExecutor) sendQuitSignals(ptmx *os.File, cmd string) error {
+	// Determine the appropriate quit signal based on the command
+	quitSignals := e.getQuitSignalsForCommand(cmd)
+	
+	for _, signal := range quitSignals {
+		if _, err := ptmx.Write([]byte(signal)); err == nil {
+			// Wait a bit for the command to process the signal
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	
+	return nil
+}
+
+// getQuitSignalsForCommand returns appropriate quit signals for different commands
+func (e *interactiveExecutor) getQuitSignalsForCommand(cmd string) []string {
+	cmdLower := strings.ToLower(cmd)
+	
+	// Extract the base command
+	cmdFields := strings.Fields(cmd)
+	if len(cmdFields) == 0 {
+		return []string{"\x03"} // Ctrl+C as fallback
+	}
+	
+	baseCmd := strings.ToLower(cmdFields[0])
+	
+	switch baseCmd {
+	case "top", "htop", "btop":
+		return []string{"q", "\x03"} // 'q' then Ctrl+C
+	case "less", "more":
+		return []string{"q", "\x03"} // 'q' then Ctrl+C
+	case "vim", "vi", "nvim":
+		return []string{"\x1b", ":q!\r", "\x03"} // ESC, :q!, then Ctrl+C
+	case "nano":
+		return []string{"\x03", "\x18"} // Ctrl+C, then Ctrl+X
+	case "emacs":
+		return []string{"\x03\x03"} // Ctrl+C Ctrl+C (keyboard-quit)
+	case "watch":
+		return []string{"\x03"} // Ctrl+C
+	case "tail":
+		if strings.Contains(cmdLower, "-f") {
+			return []string{"\x03"} // Ctrl+C for tail -f
+		}
+		return []string{"\x03"}
+	case "ssh", "telnet":
+		return []string{"~.", "\x03"} // SSH escape, then Ctrl+C
+	case "docker":
+		if strings.Contains(cmdLower, "attach") {
+			return []string{"\x10\x11", "\x03"} // Ctrl+P Ctrl+Q, then Ctrl+C
+		}
+		return []string{"\x03"}
+	case "mysql", "psql", "redis-cli", "mongo":
+		return []string{"exit\r", "quit\r", "\x03"} // Database exit commands, then Ctrl+C
+	case "python", "python3", "node", "ruby", "irb":
+		return []string{"exit()\r", "quit()\r", "\x04", "\x03"} // REPL exit, Ctrl+D, Ctrl+C
+	case "btm":
+		return []string{"q", "\x03"} // 'q' then Ctrl+C
+	default:
+		// Generic quit signals
+		return []string{"q", "\x1b", "\x03"} // 'q', ESC, then Ctrl+C
+	}
 }
 
 // ExtendedExecutor combines both regular and interactive execution

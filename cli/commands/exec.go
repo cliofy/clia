@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/yourusername/clia/core/executor"
@@ -12,6 +13,7 @@ import (
 // NewExecCommand creates the exec command
 func NewExecCommand(cli *CLI, ctx context.Context) *cobra.Command {
 	var forceInteractive, forceNonInteractive, captureLastFrame bool
+	var timeout time.Duration
 	
 	cmd := &cobra.Command{
 		Use:   "exec [command]",
@@ -70,8 +72,13 @@ func NewExecCommand(cli *CLI, ctx context.Context) *cobra.Command {
 						shouldCapture = cli.Config.ShouldCaptureLastFrame()
 					}
 					
-					// Execute with optional capture
-					lastFrame, err := extExec.ExecuteInteractiveWithCapture(command, shouldCapture)
+					// Auto-enable capture when timeout is specified
+					if timeout > 0 {
+						shouldCapture = true
+					}
+					
+					// Execute with optional capture and timeout
+					lastFrame, err := extExec.ExecuteInteractiveWithCaptureAndTimeout(command, shouldCapture, timeout)
 					
 					// Display captured frame if available
 					if lastFrame != "" {
@@ -129,6 +136,7 @@ func NewExecCommand(cli *CLI, ctx context.Context) *cobra.Command {
 	cmd.Flags().BoolVar(&forceInteractive, "interactive", false, "force interactive mode")
 	cmd.Flags().BoolVar(&forceNonInteractive, "no-interactive", false, "force non-interactive mode")
 	cmd.Flags().BoolVar(&captureLastFrame, "capture-frame", false, "capture and display the last frame of TUI programs")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "run TUI program for specified duration and then exit automatically (e.g., 5s, 2m)")
 
 	return cmd
 }

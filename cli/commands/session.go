@@ -93,7 +93,7 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 					// Check if we should capture the last frame
 					shouldCapture := cli.Config.ShouldCaptureLastFrame()
 					
-					// Execute with optional capture
+					// Execute with optional capture (no timeout in session mode)
 					lastFrame, err := extExec.ExecuteInteractiveWithCapture(command, shouldCapture)
 					if err != nil {
 						cli.Output.Error("Execution failed: " + err.Error())
@@ -181,7 +181,7 @@ func runInteractiveSession(cli *CLI, ctx context.Context) error {
 				// Check if we should capture the last frame
 				shouldCapture := cli.Config.ShouldCaptureLastFrame()
 				
-				// Execute with optional capture
+				// Execute with optional capture (no timeout in session mode)
 				lastFrame, err := extExec.ExecuteInteractiveWithCapture(suggestion.Command, shouldCapture)
 				if err != nil {
 					cli.Output.Error("Execution failed: " + err.Error())

@@ -322,7 +322,7 @@ func runQuery(cli *CLI, ctx context.Context, args []string) error {
 			// Check if we should capture the last frame
 			shouldCapture := cli.Config.ShouldCaptureLastFrame()
 			
-			// Execute with optional capture
+			// Execute with optional capture (no timeout in default queries)
 			lastFrame, err := extExec.ExecuteInteractiveWithCapture(suggestion.Command, shouldCapture)
 			if err != nil {
 				return fmt.Errorf("execution failed: %w", err)

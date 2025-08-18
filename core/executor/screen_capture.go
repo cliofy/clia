@@ -701,12 +701,11 @@ func (ts *TerminalScreen) resetMode(params string, isPrivate bool) {
 func (ts *TerminalScreen) enterAltScreen() {
 	if !ts.inAltScreen {
 		ts.inAltScreen = true
-		// Clear alternate screen
-		for y := 0; y < ts.height; y++ {
-			for x := 0; x < ts.width; x++ {
-				ts.altScreenBuffer[y][x] = TerminalCell{Char: ' '}
-			}
-		}
+		// Don't clear the alternate screen buffer automatically
+		// Only clear when explicitly commanded via escape sequences (like \033[2J)
+		// This preserves content that was drawn before entering alternate screen
+		
+		// Reset cursor to top-left corner
 		ts.cursorX = 0
 		ts.cursorY = 0
 	}
