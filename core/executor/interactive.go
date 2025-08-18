@@ -466,8 +466,8 @@ func IsInteractiveCommandWithConfig(cmd string, cfg interface{}) *InteractiveDec
 		}
 	}
 
-	// 2. Check learned commands
-	if result := CheckLearnedCommands(cmd); result != nil {
+	// 2. Check learned commands (only use if high confidence)
+	if result := CheckLearnedCommands(cmd); result != nil && result.Confidence >= 0.9 {
 		return &InteractiveDecision{
 			IsInteractive: result.IsInteractive,
 			Confidence:    result.Confidence,
