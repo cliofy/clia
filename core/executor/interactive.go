@@ -150,8 +150,8 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureL
 	defer cancel()
 
 	// Initialize screen capture if requested
-	var screen *AnsiTermScreen
 	var lastFrame string
+	var screen TerminalScreen
 
 	if captureLastFrame {
 		// Get terminal size
@@ -160,7 +160,13 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureL
 			// Fallback to default size
 			cols, rows = 80, 24
 		}
-		screen = NewAnsiTermScreen(cols, rows)
+		
+		// Use environment variable to toggle between implementations
+		if os.Getenv("CLIA_USE_GOVTE") == "true" {
+			screen = NewGovteTerminalScreen(cols, rows)
+		} else {
+			screen = NewAnsiTermScreen(cols, rows)
+		}
 	}
 
 	// Copy stdin to PTY
@@ -240,8 +246,8 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 	defer func() { _ = ptmx.Close() }()
 
 	// Initialize screen capture if requested
-	var screen *AnsiTermScreen
 	var lastFrame string
+	var screen TerminalScreen
 
 	if captureLastFrame {
 		// Get actual terminal size
@@ -260,7 +266,12 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 			return "", fmt.Errorf("failed to set PTY size: %w", err)
 		}
 
-		screen = NewAnsiTermScreen(cols, rows)
+		// Use environment variable to toggle between implementations
+		if os.Getenv("CLIA_USE_GOVTE") == "true" {
+			screen = NewGovteTerminalScreen(cols, rows)
+		} else {
+			screen = NewAnsiTermScreen(cols, rows)
+		}
 	}
 
 	// Create timeout timer
