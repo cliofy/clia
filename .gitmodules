@@ -1,3 +1,0 @@
-[submodule "vendor/go-ansiterm"]
-	path = vendor/go-ansiterm
-	url = https://github.com/Azure/go-ansiterm.git

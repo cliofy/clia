@@ -3,8 +3,7 @@ module github.com/yourusername/clia
 go 1.24.1
 
 require (
-	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1
-	github.com/cliofy/govte v0.0.0-00010101000000-000000000000
+	github.com/cliofy/govte v0.2.0
 	github.com/creack/pty v1.1.24
 	github.com/fatih/color v1.18.0
 	github.com/joho/godotenv v1.5.1
@@ -36,9 +35,3 @@ require (
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 )
-
-// Use local submodule for go-ansiterm to allow customization
-replace github.com/Azure/go-ansiterm => ./third_party/go-ansiterm
-
-// Use local govte for terminal emulation
-replace github.com/cliofy/govte => ./third_party/govte

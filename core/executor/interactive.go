@@ -161,12 +161,8 @@ func (e *interactiveExecutor) ExecuteInteractiveWithCapture(cmd string, captureL
 			cols, rows = 80, 24
 		}
 		
-		// Use environment variable to toggle between implementations
-		if os.Getenv("CLIA_USE_GOVTE") == "true" {
-			screen = NewGovteTerminalScreen(cols, rows)
-		} else {
-			screen = NewAnsiTermScreen(cols, rows)
-		}
+		// Use govte for terminal emulation and screen capture
+		screen = NewGovteTerminalScreen(cols, rows)
 	}
 
 	// Copy stdin to PTY
@@ -266,12 +262,8 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 			return "", fmt.Errorf("failed to set PTY size: %w", err)
 		}
 
-		// Use environment variable to toggle between implementations
-		if os.Getenv("CLIA_USE_GOVTE") == "true" {
-			screen = NewGovteTerminalScreen(cols, rows)
-		} else {
-			screen = NewAnsiTermScreen(cols, rows)
-		}
+		// Use govte for terminal emulation and screen capture
+		screen = NewGovteTerminalScreen(cols, rows)
 	}
 
 	// Create timeout timer
@@ -351,7 +343,7 @@ func (e *interactiveExecutor) executeWithTimeout(cmd string, captureLastFrame bo
 	// Capture final frame if we haven't captured one yet and capturing is enabled
 	if captureLastFrame && screen != nil {
 		if lastFrame == "" {
-			// Get the final frame - AnsiTermScreen handles this automatically
+			// Get the final frame from the terminal screen
 			if altExitFrame := screen.GetLastFrame(); altExitFrame != "" {
 				lastFrame = altExitFrame
 			} else {

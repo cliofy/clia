@@ -1,7 +1,7 @@
 package executor
 
-// TerminalScreen defines the common interface for terminal screen implementations
-// This interface abstracts the differences between AnsiTermScreen and GovteTerminalScreen
+// TerminalScreen defines the interface for terminal screen implementations
+// This interface is implemented by GovteTerminalScreen for terminal emulation and screen capture
 type TerminalScreen interface {
 	// ProcessOutput processes terminal output data
 	ProcessOutput(data []byte)
@@ -16,6 +16,5 @@ type TerminalScreen interface {
 	DetectedAltScreenExit() bool
 }
 
-// Ensure both implementations satisfy the interface
-var _ TerminalScreen = (*AnsiTermScreen)(nil)
+// Ensure govte implementation satisfies the interface
 var _ TerminalScreen = (*GovteTerminalScreen)(nil)
